@@ -1,0 +1,107 @@
+# OpenAI Review Packet
+
+## Purpose
+
+This document is a reviewer map for the public repository. It is not an OpenAI
+application, submission, endorsement request, or evidence that OpenAI has
+reviewed the project.
+
+## Review in 15 Minutes
+
+1. Read the scope and non-goals in [`../README.md`](../README.md).
+2. Inspect the closed graph in [`architecture.md`](architecture.md).
+3. Compare implementation behavior with [`verification.md`](verification.md).
+4. Run the public suite from a clean checkout:
+
+   ```bash
+   PYTHONPATH=src python3 -m unittest discover -s tests -v
+   ```
+
+   Or run the full repository review contract:
+
+   ```bash
+   make check
+   ```
+
+5. Review [`trust-boundaries.md`](trust-boundaries.md) and confirm external
+   effects remain outside the package.
+6. Inspect the public Tura integration contract and conformance tests in
+   [`tura-integration.md`](tura-integration.md).
+7. Inspect the exact public AGPL component identities and maturity split in
+   [`full-stack-profile.md`](full-stack-profile.md).
+8. Review [`provenance.md`](provenance.md) and scan the complete history for
+   private or third-party material.
+9. Treat [`internal-benchmark.md`](internal-benchmark.md) only as labeled,
+   non-public motivation.
+
+## Contribution Summary
+
+The public contribution is an original, standard-library Python reference
+implementation that makes a collaboration control loop explicit:
+
+- parent-owned ordered exit predicates;
+- deterministic first-false selection;
+- bounded worker packets;
+- lease/CAS ownership modeling;
+- typed terminal receipt with exact task-lease release;
+- same-attempt effect reconciliation without executor replay;
+- exact callback destination, stable continuation recovery, and convergence
+  proof;
+- callback, receipt, and continuation ACK identities after convergence;
+- exact parent-owned `MissionReadback`, separate from the worker's advisory
+  predicate claim;
+- return to parent mission verification;
+- a transport-neutral Tura adapter contract that third parties can implement
+  without importing a domain-specific application schema.
+
+It aims to make these semantics small enough to audit, adapt, and test without
+requiring a private agent runtime.
+
+## Claim-to-Evidence Table
+
+| Claim | Public evidence | Limitation |
+|---|---|---|
+| The graph is closed in the reference state machine | Source plus deterministic end-to-end test | One process, in-memory only |
+| First-false ownership is explicit | Mission/predicate types and negative tests | Host supplies predicate truth |
+| Dispatch is bounded | Immutable task-packet fields and validation | No provider authorization |
+| Ownership conflicts fail closed | Lease/CAS and terminal-release tests | Not a distributed lock |
+| Unsettled effects do not blindly retry | Same-attempt reconciliation test | Real settlement authority belongs to an adapter |
+| Callback requires convergence and stable retry identity | Destination/recovery/proof/ACK tests | No durable or authenticated network transport |
+| Task completion is not mission completion | Worker-claim versus parent-`MissionReadback` tests | Integration must supply an authoritative current reader |
+| Runtime dependency surface is small | Package metadata and imports | Development/release tooling still requires review |
+| Tura is a usable implementation route | Public adapter, terminal envelope, fake client, and conformance tests | A real deployment still supplies transport, durability, credentials, and effect authority |
+| The modified runtime is inspectable | Public AGPL fork and exact component manifest | Public source is not installed/running acceptance |
+| Internal measurements motivated publication | Labeled aggregate summary | Underlying corpus is not public or reproducible here |
+
+## Reviewer Questions
+
+- Can every accepted transition be correlated to one mission revision, packet,
+  lease/CAS claim, terminal receipt, and destination?
+- Can stale or mismatched state reach acknowledgement?
+- Can a worker or receipt silently complete the parent mission?
+- Are duplicate terminalization and acknowledgement observable and rejected?
+- Does any public claim exceed what the public fixtures prove?
+- Does the repository contain material attributable to external/private systems?
+- Is the in-memory limitation unmistakable to an integrator?
+
+## Release Readiness Checklist
+
+- [ ] Clean checkout passes the canonical Python 3.11+ suite.
+- [ ] Exact test count and output are captured for the candidate commit.
+- [ ] Package metadata, tag, and changelog agree on version and MIT license.
+- [ ] Source archive matches the reviewed commit.
+- [ ] Full-history secret and private-data scan is clean.
+- [ ] Third-party code and asset inventory is complete.
+- [ ] Synthetic end-to-end run uses public bytes only.
+- [ ] No benchmark corpus or private receipt is bundled.
+- [ ] Security advisory channel is enabled.
+- [ ] At least one independent clean-checkout reproduction is recorded.
+
+Unchecked boxes are open release predicates, not implied successes.
+
+## Current Honest Disposition
+
+The repository is suitable for source review once its implementation and tests
+match the contracts above. A passing local suite establishes source behavior
+only. It does not establish package publication, installed adoption, a live
+Codex integration, production exactly-once delivery, or OpenAI acceptance.
