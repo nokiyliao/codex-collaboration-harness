@@ -42,8 +42,8 @@ artifacts under `dist/`.
 On 2026-08-31, the current source tree produced:
 
 - exact complete-cycle selector: `Ran 1 test` and `OK`;
-- full suite: `Ran 33 tests` and `OK`;
-- review-readiness scan: 41 authored public files, passed;
+- full suite: `Ran 70 tests` and `OK`;
+- review-readiness scan: 50 authored public files, passed;
 - evidence-manifest integrity: 1 covered artifact, passed;
 - synthetic demo and import smoke check: passed.
 
@@ -64,7 +64,7 @@ parent mission with ordered predicates
   -> target exact parent destination
   -> verify exact convergence
   -> acknowledge once
-  -> obtain exact parent-owned MissionReadback
+  -> obtain exact parent-owned MissionSnapshotReadback
   -> re-evaluate parent mission
 ```
 
@@ -74,7 +74,7 @@ runtime.
 
 ## Invariant Matrix
 
-The current v0.1.1 suite contains 33 tests. Its direct evidence is:
+The current v0.2.0 suite contains 70 tests. Its direct evidence is:
 
 | Test area | Direct observation |
 |---|---|
@@ -84,13 +84,20 @@ The current v0.1.1 suite contains 33 tests. Its direct evidence is:
 | Pre-execution rejection | A typed blocked terminal receipt is written and the exact lease is released without an executor call |
 | Unsettled reconciliation | One attempt/effect is retained, executor retry is blocked, and settlement terminalizes the same identity with an executor call count of one |
 | Callback target | A wrong proof destination creates no ACK or mission verification; the terminal task lease remains released |
-| Callback recovery | Retry reuses the same `PREPARED` continuation and reaches `COMMITTED` then `ACKNOWLEDGED` without a duplicate continuation |
+| Callback recovery | Delivery start becomes `DELIVERY_UNSETTLED` on uncertain outcome; retry requires an exact authoritative absence proof, while committed delivery requires its exact convergence proof |
 | Identical replay | Replay after acknowledgement returns empty effect, continuation, and acknowledgement tuples |
 | Changed replay | Reusing an acknowledged packet with a changed identity is a typed conflict |
 | ACK cardinality | Callback, receipt, and continuation ACK identities are emitted once under one acknowledgement |
 | Mission return | A terminal child outcome returns to parent `MissionVerification` and selects completion or route selection there |
 | Parent readback authority | A true worker claim cannot complete a false parent predicate; a true parent readback can complete it despite a false worker claim |
-| Readback identity | A readback for another mission revision or predicate is rejected |
+| Readback identity | A complete ordered snapshot is required; stale parent sequences and conflicting content at the same sequence are rejected |
+| Recovery authority | Only diagnostic/plan blockers with reconciled effects, subset scope, unchanged parent fields, verification plan, safe effect class, and available parent budget are admitted |
+| Recovery replay | Repeating the same blocker/state/action fingerprint is a no-op rather than a second effect |
+| Packet identity | A tampered content-addressed packet cannot acquire a lease |
+| Failure authority | Executor and harness failure origins remain distinct through terminal receipt reconciliation |
+| Step effects | Unsettled step identity must reconcile exactly before local recovery is considered |
+| Route disposition | Parent-disposed routes are excluded and deterministic fallback selection occurs |
+| Mission supersession | Old ACK evidence can be classified without mutating newer mission truth |
 | Stale mission | A superseded mission revision is rejected before lease or execution |
 | Duplicate dispatch | A second claim for the same packet is rejected |
 | Stale CAS | A scope snapshot captured before a prior terminalization is rejected |
@@ -102,14 +109,15 @@ The current v0.1.1 suite contains 33 tests. Its direct evidence is:
 | Packaging metadata exclusion | Generated `*.egg-info` metadata is excluded while authored `src/` remains scanned |
 | Scanner inclusion | Public source remains inside the review-readiness scan boundary |
 | Tura adapter success | A bounded task/lease maps deterministically to a Tura request and a settled terminal envelope maps to the core result |
+| Tura wire contract | Packaged request/terminal schemas and golden vectors bind the exact protocol version and request digest |
 | Tura unsettled effect | The exact effect identity remains unsettled for core reconciliation rather than being retried |
 | Tura transport/terminal failure | Transport exceptions and explicit terminal failures become deterministic typed failures |
 | Tura identity closure | Packet, lease, request, and executor drift is rejected before becoming a core result |
 | Tura/core failure composition | Execution failures and typed rejections preserve the exact failure code, detail digest, and observed effect across the adapter-to-core boundary; a second execution is blocked until explicit `NONE` or `SETTLED` reconciliation |
 
 The implementation has additional structural validation, and future paths may
-need new dedicated fixtures. Public evidence is limited to the 33 tests
-above and the exact source under review.
+need new dedicated fixtures. Public evidence is limited to the 70 tests above
+and the exact source under review.
 
 ## Reproduction Record
 
@@ -141,3 +149,18 @@ artifact identity and the actual adapter behavior were separately read back.
 - authenticated callback delivery;
 - permission for external effects;
 - benchmark performance or universal productivity improvement.
+
+## Release Artifact Verification
+
+`make build && make verify-dist` requires exactly one wheel and one sdist,
+checks that both contain the versioned Tura schemas/golden vectors, installs the
+wheel in a fresh isolated virtual environment with no index or dependencies,
+checks installed metadata/imports outside the repository, runs `pip check`, and
+writes `dist/SHA256SUMS`. The tag-triggered release workflow additionally
+requires an annotated tag matching `pyproject.toml` and emits GitHub build
+provenance for those checksums.
+
+`make check-components` is a separate networked predicate that verifies the
+public Tura branch, exact commit trees, ancestry, license, and modification
+notice. Its success establishes source lineage only, never installed/runtime
+acceptance.

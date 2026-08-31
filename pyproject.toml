@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=77"]
+requires = ["setuptools==84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "codex-collaboration-harness"
-version = "0.1.1"
+version = "0.2.0"
 description = "A deterministic, domain-neutral harness for bounded multi-agent collaboration."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -34,7 +34,7 @@ Issues = "https://github.com/nokiyliao/codex-collaboration-harness/issues"
 
 [project.optional-dependencies]
 dev = [
-  "build>=1.2,<2",
+  "build==1.6.0",
 ]
 
 [tool.setuptools]
@@ -44,4 +44,8 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-codex_collaboration_harness = ["py.typed"]
+codex_collaboration_harness = [
+  "py.typed",
+  "protocol/*.json",
+  "protocol/golden/*.json",
+]

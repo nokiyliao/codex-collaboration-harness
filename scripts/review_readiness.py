@@ -17,6 +17,7 @@ REQUIRED_PATHS = (
     "Makefile",
     ".gitignore",
     ".github/workflows/ci.yml",
+    ".github/workflows/release.yml",
     ".github/dependabot.yml",
     ".github/ISSUE_TEMPLATE/config.yml",
     ".github/ISSUE_TEMPLATE/bug_report.yml",
@@ -31,12 +32,19 @@ REQUIRED_PATHS = (
     "evidence/internal_benchmark_summary.json",
     "evidence/provenance_manifest.json",
     "scripts/check_provenance.py",
+    "scripts/check_components.py",
     "scripts/review_readiness.py",
+    "scripts/verify_dist.py",
     "src/codex_collaboration_harness/adapters/__init__.py",
     "src/codex_collaboration_harness/adapters/tura.py",
     "docs/tura-integration.md",
     "docs/full-stack-profile.md",
     "components/tura-runtime.json",
+    "src/codex_collaboration_harness/protocol/tura_terminal_envelope_v1.schema.json",
+    "src/codex_collaboration_harness/protocol/tura_dispatch_request_v1.schema.json",
+    "src/codex_collaboration_harness/protocol/golden/tura_dispatch_request_v1.json",
+    "src/codex_collaboration_harness/protocol/golden/tura_result_v1.json",
+    "src/codex_collaboration_harness/protocol/golden/tura_failure_v1.json",
 )
 EXCLUDED_DIRECTORIES = {
     ".git",
@@ -166,8 +174,10 @@ def _check_pyproject(errors: list[str]) -> None:
 
 def _check_ci(errors: list[str]) -> None:
     path = ROOT / ".github" / "workflows" / "ci.yml"
+    release_path = ROOT / ".github" / "workflows" / "release.yml"
     try:
         workflow = path.read_text(encoding="utf-8")
+        release_workflow = release_path.read_text(encoding="utf-8")
     except OSError as error:
         errors.append(f"cannot read CI workflow: {error}")
         return
@@ -177,9 +187,30 @@ def _check_ci(errors: list[str]) -> None:
         "make check",
         "make installed-smoke",
         "make build",
+        "make check-components",
+        "make verify-dist",
     ):
         if required not in workflow:
             errors.append(f"CI workflow is missing {required!r}")
+    for required in (
+        "git cat-file -t",
+        "make check-components",
+        "make verify-dist",
+        "subject-checksums: dist/SHA256SUMS",
+        "gh release create",
+        "--verify-tag",
+    ):
+        if required not in release_workflow:
+            errors.append(f"release workflow is missing {required!r}")
+    if "--clobber" in release_workflow:
+        errors.append("release workflow must not overwrite existing assets")
+    action_pattern = re.compile(r"uses:\s+[^\s#]+@([^\s#]+)")
+    for name, text in (("ci", workflow), ("release", release_workflow)):
+        for reference in action_pattern.findall(text):
+            if not re.fullmatch(r"[0-9a-f]{40}", reference):
+                errors.append(
+                    f"{name} workflow action ref must be a full commit SHA: {reference}"
+                )
 
 
 def _check_spdx(errors: list[str]) -> None:

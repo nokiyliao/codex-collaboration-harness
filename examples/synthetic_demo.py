@@ -16,7 +16,9 @@ from codex_collaboration_harness import (
     ExitPredicate,
     Lease,
     Mission,
-    MissionReadback,
+    MissionSnapshotReadback,
+    PredicateReadback,
+    PredicateTruth,
     ResumeProof,
     Route,
     TaskPacket,
@@ -64,6 +66,7 @@ class SyntheticTransport:
             continuation_id=continuation.continuation_id,
             receipt_id=receipt.receipt_id,
             destination=continuation.destination,
+            turn_request_id=continuation.turn_request_id,
             completed_turn_id=canonical_sha256(
                 {
                     "receipt_id": receipt.receipt_id,
@@ -101,16 +104,31 @@ def make_mission() -> Mission:
 def run_demo() -> dict[str, object]:
     harness = CollaborationHarness()
     mission = make_mission()
-    readback = MissionReadback(
+    predicates = tuple(
+        PredicateReadback(
+            predicate_key=predicate.key,
+            truth=PredicateTruth.SATISFIED,
+            evidence_digest=canonical_sha256(
+                {
+                    "source": "synthetic-parent-verifier",
+                    "predicate_key": predicate.key,
+                    "truth": PredicateTruth.SATISFIED,
+                }
+            ),
+        )
+        for predicate in mission.predicates
+    )
+    readback = MissionSnapshotReadback(
         mission_id=mission.mission_id,
         mission_revision=mission.revision,
-        predicate_key="artifact_verified",
-        satisfied=True,
+        parent_state_revision="parent-state.demo.1",
+        parent_state_sequence=1,
+        predicates=predicates,
         evidence_digest=canonical_sha256(
             {
                 "source": "synthetic-parent-verifier",
-                "predicate_key": "artifact_verified",
-                "satisfied": True,
+                "parent_state_revision": "parent-state.demo.1",
+                "predicates": predicates,
             }
         ),
     )

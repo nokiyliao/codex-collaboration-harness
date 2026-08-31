@@ -37,8 +37,16 @@ class MyTuraClient(TuraClient):
 - mission, revision, mode, predicate, route, and executor identity;
 - bounded scope and both expected and claimed CAS versions;
 - expected predicate delta and abandon condition;
+- parent-bounded local recovery budget;
 - exact callback destination and lease identity;
 - a deterministic `request_id` derived from those public fields.
+
+The protocol version is exactly `tura-collaboration/v1` and participates in
+the request identity. `encode_tura_dispatch_request()` emits the canonical JSON
+shape. The packaged request schema and golden vector are:
+
+- `protocol/tura_dispatch_request_v1.schema.json`
+- `protocol/golden/tura_dispatch_request_v1.json`
 
 It contains no filesystem path, shell command, provider secret, model prompt,
 UTM object, account payload, or private runtime schema.
@@ -52,6 +60,15 @@ The client returns one `TuraTerminalEnvelope`:
 - `NONE` may be asserted only for an explicit failure envelope with no effect
   identity;
 - request, packet, lease, and executor identities must all match.
+
+JSON terminals must include the same exact protocol version. The only inbound
+wire normalization boundary is `decode_tura_terminal_envelope()`; core records
+never accept string substitutes for Enum or bool values. The packaged terminal
+schema and result/failure vectors are:
+
+- `protocol/tura_terminal_envelope_v1.schema.json`
+- `protocol/golden/tura_result_v1.json`
+- `protocol/golden/tura_failure_v1.json`
 
 `TuraAdapter.dispatch()` maps the envelope to `ExecutionResult`,
 `ExecutionFailure`, or `TuraTypedRejection`. An unsettled result remains
@@ -74,7 +91,7 @@ A production integration must provide:
 3. effect receipts and interruption reconciliation;
 4. terminalization and process cleanup;
 5. guided callback delivery, convergence proof, and acknowledgement;
-6. an authoritative parent `MissionReadback`;
+6. an authoritative parent `MissionSnapshotReadback` with monotonic sequence;
 7. provider credentials, sandboxing, quotas, and irreversible-effect policy.
 
 The public adapter does not grant those capabilities. It makes the handoff
@@ -90,7 +107,7 @@ PYTHONPATH=src python3 -m unittest tests.test_tura_adapter -v
 ```
 
 The public fake-client suite covers settled success, unsettled effect
-preservation, transport exception, typed terminal failure, terminal identity
+preservation, exact wire/golden identity, transport exception, typed terminal failure, terminal identity
 mismatch, and adapter-to-core failure composition for both settled-effect and
 proven-no-effect paths. It uses no network, credential, private corpus, or
 installed runtime.
@@ -110,3 +127,7 @@ keeps these identities distinct:
 An adapter test or source commit is not proof of installed Tura behavior. A
 real-runtime conformance report must name the exact component commit and remain
 separate from this package's synthetic acceptance.
+
+Run `make check-components` to resolve the published branch, four declared Git
+trees, ancestry, `LICENSE`, and `MODIFICATIONS.md` from GitHub. This networked
+check is intentionally not folded into deterministic offline `make check`.

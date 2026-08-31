@@ -7,9 +7,10 @@ transport, credential, private schema, or Tura implementation code.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Protocol, TypeAlias
+from typing import Protocol, TypeAlias, TypeVar, cast
 
 from ..core import (
     Destination,
@@ -18,10 +19,20 @@ from ..core import (
     ExecutionResult,
     ExecutorFailureSignal,
     FailureCode,
+    FailureOrigin,
+    HarnessViolation,
     Lease,
     TaskPacket,
+    _require_bool,
+    _require_enum,
+    _require_executor_failure_code,
+    _require_int,
+    _require_optional_enum,
+    _require_scope_version_ints,
     canonical_sha256,
 )
+
+TURA_PROTOCOL_VERSION = "tura-collaboration/v1"
 
 
 class TuraTerminalKind(str, Enum):
@@ -29,6 +40,37 @@ class TuraTerminalKind(str, Enum):
 
     RESULT = "result"
     FAILURE = "failure"
+
+
+WireEnumT = TypeVar("WireEnumT", bound=Enum)
+
+
+def _decode_wire_enum(
+    name: str, value: object, enum_type: type[WireEnumT]
+) -> WireEnumT:
+    if type(value) is not str:
+        raise TypeError(f"{name} must be a JSON string")
+    try:
+        return enum_type(value)
+    except ValueError as error:
+        raise ValueError(f"{name} is not a valid {enum_type.__name__}") from error
+
+
+def _decode_wire_text(name: str, value: object) -> str:
+    if type(value) is not str or not value.strip():
+        raise TypeError(f"{name} must be a non-empty JSON string")
+    return cast(str, value)
+
+
+def _decode_optional_wire_text(name: str, value: object) -> str | None:
+    if value is None:
+        return None
+    return _decode_wire_text(name, value)
+
+
+def _decode_wire_bool(name: str, value: object) -> bool:
+    _require_bool(name, value)
+    return cast(bool, value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,12 +89,27 @@ class TuraDispatchRequest:
     claimed_scope_versions: tuple[tuple[str, int], ...]
     expected_delta: str
     abandon_if: str
+    recovery_budget: int
     destination: Destination
     lease_id: str
+    protocol_version: str = TURA_PROTOCOL_VERSION
     request_id: str = field(init=False)
 
     def __post_init__(self) -> None:
+        if self.protocol_version != TURA_PROTOCOL_VERSION:
+            raise ValueError(f"protocol_version must be {TURA_PROTOCOL_VERSION!r}")
+        _require_int("mission_revision", self.mission_revision)
+        _require_int("recovery_budget", self.recovery_budget)
+        if self.recovery_budget < 0:
+            raise ValueError("recovery_budget must be non-negative")
+        _require_scope_version_ints(
+            "expected_scope_versions", self.expected_scope_versions
+        )
+        _require_scope_version_ints(
+            "claimed_scope_versions", self.claimed_scope_versions
+        )
         payload = {
+            "protocol_version": self.protocol_version,
             "packet_id": self.packet_id,
             "mission_id": self.mission_id,
             "mission_revision": self.mission_revision,
@@ -65,6 +122,7 @@ class TuraDispatchRequest:
             "claimed_scope_versions": self.claimed_scope_versions,
             "expected_delta": self.expected_delta,
             "abandon_if": self.abandon_if,
+            "recovery_budget": self.recovery_budget,
             "destination": self.destination,
             "lease_id": self.lease_id,
         }
@@ -86,10 +144,13 @@ class TuraTerminalEnvelope:
     effect_id: str | None
     output_digest: str
     predicate_satisfied: bool
+    protocol_version: str = TURA_PROTOCOL_VERSION
     failure_code: FailureCode | None = None
     failure_detail_digest: str | None = None
 
     def __post_init__(self) -> None:
+        if self.protocol_version != TURA_PROTOCOL_VERSION:
+            raise ValueError(f"protocol_version must be {TURA_PROTOCOL_VERSION!r}")
         for name in (
             "request_id",
             "packet_id",
@@ -100,6 +161,10 @@ class TuraTerminalEnvelope:
             value = getattr(self, name)
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{name} must be a non-empty string")
+        _require_enum("kind", self.kind, TuraTerminalKind)
+        _require_enum("effect_state", self.effect_state, EffectState)
+        _require_bool("predicate_satisfied", self.predicate_satisfied)
+        _require_optional_enum("failure_code", self.failure_code, FailureCode)
         if self.kind is TuraTerminalKind.RESULT:
             if self.effect_state is EffectState.NONE or not self.effect_id:
                 raise ValueError(
@@ -110,10 +175,73 @@ class TuraTerminalEnvelope:
         else:
             if self.failure_code is None or not self.failure_detail_digest:
                 raise ValueError("failure envelope requires typed failure evidence")
+            _require_executor_failure_code("failure_code", self.failure_code)
             if self.effect_state is EffectState.NONE and self.effect_id is not None:
                 raise ValueError("no-effect failure cannot carry effect_id")
             if self.effect_state is not EffectState.NONE and not self.effect_id:
                 raise ValueError("effect-bearing failure requires effect_id")
+
+
+_TURA_TERMINAL_WIRE_FIELDS = frozenset(
+    {
+        "protocol_version",
+        "request_id",
+        "packet_id",
+        "lease_id",
+        "executor_id",
+        "kind",
+        "effect_state",
+        "effect_id",
+        "output_digest",
+        "predicate_satisfied",
+        "failure_code",
+        "failure_detail_digest",
+    }
+)
+
+
+def decode_tura_terminal_envelope(
+    payload: Mapping[str, object],
+) -> TuraTerminalEnvelope:
+    """Normalize one exact JSON terminal envelope into canonical runtime types."""
+
+    if not isinstance(payload, Mapping):
+        raise TypeError("Tura terminal wire payload must be a mapping")
+    keys = set(payload)
+    missing = sorted(_TURA_TERMINAL_WIRE_FIELDS - keys)
+    unknown = sorted(keys - _TURA_TERMINAL_WIRE_FIELDS)
+    if missing or unknown:
+        raise ValueError(
+            f"Tura terminal wire fields differ: missing={missing}, unknown={unknown}"
+        )
+    raw_failure_code = payload["failure_code"]
+    failure_code = (
+        None
+        if raw_failure_code is None
+        else _decode_wire_enum("failure_code", raw_failure_code, FailureCode)
+    )
+    return TuraTerminalEnvelope(
+        protocol_version=_decode_wire_text(
+            "protocol_version", payload["protocol_version"]
+        ),
+        request_id=_decode_wire_text("request_id", payload["request_id"]),
+        packet_id=_decode_wire_text("packet_id", payload["packet_id"]),
+        lease_id=_decode_wire_text("lease_id", payload["lease_id"]),
+        executor_id=_decode_wire_text("executor_id", payload["executor_id"]),
+        kind=_decode_wire_enum("kind", payload["kind"], TuraTerminalKind),
+        effect_state=_decode_wire_enum(
+            "effect_state", payload["effect_state"], EffectState
+        ),
+        effect_id=_decode_optional_wire_text("effect_id", payload["effect_id"]),
+        output_digest=_decode_wire_text("output_digest", payload["output_digest"]),
+        predicate_satisfied=_decode_wire_bool(
+            "predicate_satisfied", payload["predicate_satisfied"]
+        ),
+        failure_code=failure_code,
+        failure_detail_digest=_decode_optional_wire_text(
+            "failure_detail_digest", payload["failure_detail_digest"]
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,11 +255,16 @@ class TuraTypedRejection:
     detail_digest: str
     observed_effect_id: str | None = None
 
+    def __post_init__(self) -> None:
+        _require_enum("code", self.code, FailureCode)
+
 
 class TuraClient(Protocol):
     """Contract a third party implements with its chosen Tura transport."""
 
-    def dispatch(self, request: TuraDispatchRequest) -> TuraTerminalEnvelope:
+    def dispatch(
+        self, request: TuraDispatchRequest
+    ) -> TuraTerminalEnvelope | Mapping[str, object]:
         """Submit one bounded request and return one terminal envelope."""
 
 
@@ -151,6 +284,7 @@ class TuraRejectedError(ExecutorFailureSignal):
             "failure_code": rejection.code,
             "detail_digest": rejection.detail_digest,
             "observed_effect_id": rejection.observed_effect_id,
+            "failure_origin": FailureOrigin.EXECUTOR,
         }
         super().__init__(
             ExecutionFailure(
@@ -190,9 +324,43 @@ def build_tura_dispatch_request(
         claimed_scope_versions=lease.scope_versions,
         expected_delta=packet.expected_delta,
         abandon_if=packet.abandon_if,
+        recovery_budget=packet.recovery_budget,
         destination=packet.destination,
         lease_id=lease.lease_id,
     )
+
+
+def encode_tura_dispatch_request(
+    request: TuraDispatchRequest,
+) -> dict[str, object]:
+    """Return the exact dependency-free JSON wire shape for one request."""
+
+    return {
+        "protocol_version": request.protocol_version,
+        "request_id": request.request_id,
+        "packet_id": request.packet_id,
+        "mission_id": request.mission_id,
+        "mission_revision": request.mission_revision,
+        "mission_mode": request.mission_mode,
+        "predicate_key": request.predicate_key,
+        "route_id": request.route_id,
+        "executor_id": request.executor_id,
+        "scope": list(request.scope),
+        "expected_scope_versions": [
+            list(item) for item in request.expected_scope_versions
+        ],
+        "claimed_scope_versions": [
+            list(item) for item in request.claimed_scope_versions
+        ],
+        "expected_delta": request.expected_delta,
+        "abandon_if": request.abandon_if,
+        "recovery_budget": request.recovery_budget,
+        "destination": {
+            "coordinator_id": request.destination.coordinator_id,
+            "thread_id": request.destination.thread_id,
+        },
+        "lease_id": request.lease_id,
+    }
 
 
 def _execution_failure(
@@ -207,6 +375,7 @@ def _execution_failure(
         "failure_code": code,
         "detail_digest": detail_digest,
         "observed_effect_id": observed_effect_id,
+        "failure_origin": FailureOrigin.EXECUTOR,
     }
     return ExecutionFailure(
         failure_id=f"execution_failure_{canonical_sha256(payload)}",
@@ -214,6 +383,29 @@ def _execution_failure(
         lease_id=request.lease_id,
         failure_code=code,
         detail_digest=detail_digest,
+        observed_effect_id=observed_effect_id,
+        failure_origin=FailureOrigin.EXECUTOR,
+    )
+
+
+def _invalid_failure_code_rejection(
+    request: TuraDispatchRequest,
+    error: HarnessViolation,
+    *,
+    observed_request_id: str = "unavailable",
+    observed_effect_id: str | None = None,
+) -> TuraTypedRejection:
+    return TuraTypedRejection(
+        code=FailureCode.INVALID_FAILURE_CODE,
+        mismatched_fields=("failure_code",),
+        expected_request_id=request.request_id,
+        observed_request_id=observed_request_id,
+        detail_digest=canonical_sha256(
+            {
+                "kind": "invalid_failure_code",
+                "detail_digest": canonical_sha256(error.detail),
+            }
+        ),
         observed_effect_id=observed_effect_id,
     )
 
@@ -257,7 +449,20 @@ class TuraAdapter:
                 detail_digest=detail_digest,
             )
         try:
-            envelope = self.client.dispatch(request)
+            wire_or_envelope = self.client.dispatch(request)
+        except HarnessViolation as error:
+            if error.code is FailureCode.INVALID_FAILURE_CODE:
+                return _invalid_failure_code_rejection(request, error)
+            detail_digest = canonical_sha256(
+                {
+                    "kind": "transport_exception",
+                    "error_type": type(error).__name__,
+                    "message_digest": canonical_sha256(str(error)),
+                }
+            )
+            return _execution_failure(
+                request, FailureCode.EXECUTOR_ERROR, detail_digest, None
+            )
         except Exception as error:  # noqa: BLE001 - external transport boundary
             detail_digest = canonical_sha256(
                 {
@@ -269,6 +474,50 @@ class TuraAdapter:
             return _execution_failure(
                 request, FailureCode.EXECUTOR_ERROR, detail_digest, None
             )
+        if isinstance(wire_or_envelope, Mapping):
+            try:
+                envelope = decode_tura_terminal_envelope(wire_or_envelope)
+            except HarnessViolation as error:
+                observed_request_id = wire_or_envelope.get("request_id")
+                observed_effect_id = wire_or_envelope.get("effect_id")
+                return _invalid_failure_code_rejection(
+                    request,
+                    error,
+                    observed_request_id=(
+                        observed_request_id
+                        if type(observed_request_id) is str
+                        else "unavailable"
+                    ),
+                    observed_effect_id=(
+                        observed_effect_id if type(observed_effect_id) is str else None
+                    ),
+                )
+            except (TypeError, ValueError) as error:
+                detail_digest = canonical_sha256(
+                    {
+                        "kind": "invalid_envelope_wire",
+                        "error_type": type(error).__name__,
+                        "message_digest": canonical_sha256(str(error)),
+                    }
+                )
+                observed_request_id = wire_or_envelope.get("request_id")
+                observed_effect_id = wire_or_envelope.get("effect_id")
+                return TuraTypedRejection(
+                    code=FailureCode.STALE_IDENTITY,
+                    mismatched_fields=("envelope_wire",),
+                    expected_request_id=request.request_id,
+                    observed_request_id=(
+                        observed_request_id
+                        if type(observed_request_id) is str
+                        else "unavailable"
+                    ),
+                    detail_digest=detail_digest,
+                    observed_effect_id=(
+                        observed_effect_id if type(observed_effect_id) is str else None
+                    ),
+                )
+        else:
+            envelope = wire_or_envelope
         if not isinstance(envelope, TuraTerminalEnvelope):
             detail_digest = canonical_sha256(
                 {"kind": "invalid_envelope_type", "type": type(envelope).__name__}
@@ -336,6 +585,7 @@ class TuraAdapter:
 
 
 __all__ = [
+    "TURA_PROTOCOL_VERSION",
     "TuraAdapter",
     "TuraClient",
     "TuraDispatchOutcome",
@@ -346,4 +596,6 @@ __all__ = [
     "TuraTerminalKind",
     "TuraTypedRejection",
     "build_tura_dispatch_request",
+    "decode_tura_terminal_envelope",
+    "encode_tura_dispatch_request",
 ]

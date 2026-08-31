@@ -12,7 +12,8 @@ The harness models one closed collaboration cycle:
 
 ```text
 mission -> first false predicate -> bounded task packet -> lease/CAS claim
-        -> execution result -> terminal receipt -> destination-bound callback
+        -> step/effect ledger -> execution result -> terminal receipt
+        -> destination-bound callback with delivery reconciliation
         -> convergence proof -> mission verification or route selection
 ```
 
@@ -49,10 +50,18 @@ edges explicit and testable:
   exact task lease;
 - an unsettled effect can be reconciled on the same attempt without executing
   the worker again;
-- continuation targets an exact destination, survives retry under the same
-  identity, and requires convergence proof;
+- typed blockers can receive model-generated recovery proposals, but a
+  deterministic gate enforces the parent packet's scope, authority, effect,
+  destination, predicate, verification plan, and recovery budget;
+- continuation targets an exact destination and request identity; a delivery
+  that may have committed cannot retry until an authoritative absence or
+  convergence proof reconciles that same request;
 - callback, receipt, and continuation ACK identities are created only after
   convergence;
+- every mission verification consumes a complete parent snapshot with a
+  monotonic state sequence, so older truth cannot overwrite newer truth;
+- route disposition and supersession remain parent-authored evidence rather
+  than worker authority;
 - control returns to parent mission verification or route selection.
 
 ## Quick Start
@@ -72,7 +81,8 @@ python -m unittest discover -s tests -v
 The test suite is the canonical executable contract. It includes a deterministic
 in-memory end-to-end cycle and negative or recovery cases for stale mission/CAS
 state, duplicate dispatch, overlapping leases, pre-execution rejection,
-unsettled effects, callback mismatch/retry, missing convergence, and replay. It
+unsettled effects, callback mismatch/reconciliation, stale parent snapshots,
+bounded recovery, route disposition, missing convergence, and replay. It
 uses no network, credentials, private corpus, or external agent service.
 
 Run only the complete public cycle with:
@@ -97,7 +107,7 @@ The primary API is `CollaborationHarness`. Its explicit stages include `plan`,
 `claim`, `execute`, effect reconciliation, continuation/ACK, and
 `verify_mission`; `run` composes one complete settled cycle. The worker's
 `predicate_satisfied` field is advisory. Only an exact parent-owned
-`MissionReadback` may change mission truth. `Executor` and
+`MissionSnapshotReadback` may change mission truth. `Executor` and
 `ContinuationTransport` are adapter protocols. All public evidence records are
 immutable dataclasses, and `InMemoryStore` is a deterministic reference store
 rather than production persistence.
@@ -108,6 +118,18 @@ tests, the synthetic demo, and import smoke check, run:
 ```bash
 make check
 ```
+
+Networked verification of the public Tura component ref, exact Git trees,
+ancestry, license, and modification notice is deliberately separate:
+
+```bash
+make check-components
+```
+
+The packaged protocol schemas and cross-language golden vectors live under
+[`src/codex_collaboration_harness/protocol`](src/codex_collaboration_harness/protocol).
+Both request and terminal envelopes are bound to
+`protocol_version=tura-collaboration/v1`.
 
 ## What Is Verified
 

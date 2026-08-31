@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: build check demo evidence-integrity install-dev installed-smoke provenance review smoke test
+.PHONY: build check check-components demo evidence-integrity install-dev installed-smoke provenance review smoke test verify-dist
 
 install-dev:
 	$(PYTHON) -m pip install -e '.[dev]'
@@ -27,5 +27,11 @@ review:
 
 check: review provenance test demo smoke
 
+check-components:
+	$(PYTHON) scripts/check_components.py
+
 build:
 	$(PYTHON) -m build --sdist --wheel
+
+verify-dist:
+	$(PYTHON) scripts/verify_dist.py

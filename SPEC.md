@@ -135,13 +135,27 @@ A Continuation binds:
 
 - exact destination Commander identity
 - terminal receipt identity, which transitively binds the task and mission
-- state: `PREPARED`, `COMMITTED`, or `ACKNOWLEDGED`
+- deterministic `turn_request_id`
+- state: `PREPARED`, `DELIVERY_STARTED`, `DELIVERY_UNSETTLED`, or
+  `ACKNOWLEDGED`
 
-### 5.7 Mission Readback
+### 5.7 Mission Snapshot Readback
 
-A Mission Readback is parent-owned evidence containing the exact mission,
-revision, predicate, current truth value, and evidence digest. A worker's
-`predicate_satisfied` value remains advisory and cannot complete the mission.
+A Mission Snapshot Readback is parent-owned evidence containing the exact
+mission revision, a monotonic parent-state sequence, the complete ordered
+predicate truth vector, and evidence digest. Older sequences and conflicting
+content at the same sequence fail closed. A worker's `predicate_satisfied`
+value remains advisory and cannot complete the mission.
+
+### 5.8 Blocker and Recovery Records
+
+`StepAttempt` records each operation, precondition, tool, result, effect class,
+effect identity, and effect state. `BlockerReport` classifies an obstruction
+without terminalizing the task. A model may produce a `RecoveryProposal`, but
+only `RecoveryAdmission(ADMITTED)` authorizes a local method change. Admission
+requires a diagnostic or plan blocker, exact packet/lease binding, unchanged
+predicate/destination/authority, subset scope, reconciled prior effects, a
+verification plan, no new protected effect, and available parent packet budget.
 
 ## 6. State Machines
 
@@ -151,8 +165,10 @@ revision, predicate, current truth value, and evidence digest. A worker's
 PLANNED
   -> CLAIMED
   -> EXECUTING
+EXECUTING
+  -> BLOCKED_FOR_LOCAL_RECOVERY -> EXECUTING
   -> TERMINAL
-  -> CALLBACK_COMMITTED
+  -> CALLBACK_DELIVERY_STARTED
   -> ACKNOWLEDGED
 ```
 
@@ -165,13 +181,18 @@ proves `NONE` or `SETTLED`; it then terminalizes without a second execution.
 
 ```text
 PREPARED
-  -> COMMITTED
-  -> ACKNOWLEDGED
+  -> DELIVERY_STARTED
+  -> DELIVERY_UNSETTLED | ACKNOWLEDGED
+DELIVERY_UNSETTLED
+  -> PREPARED | ACKNOWLEDGED
 ```
 
 - `PREPARED`: terminal payload and target identity are durably bound.
-- `COMMITTED`: the exact target continuation contains the completed child turn
-  and a convergence proof exists.
+- `DELIVERY_STARTED`: the destination mutation may begin under the exact
+  `turn_request_id`.
+- `DELIVERY_UNSETTLED`: delivery may have committed and cannot be retried.
+  An authoritative absence proof reopens the same request as `PREPARED`; an
+  exact convergence proof moves it directly to `ACKNOWLEDGED`.
 - `ACKNOWLEDGED`: the Commander accepted the observation and persisted its next
   mission revision or terminal decision.
 

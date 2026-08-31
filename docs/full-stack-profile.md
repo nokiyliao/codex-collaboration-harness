@@ -11,7 +11,7 @@ parent mission / ordered predicates
   -> public AGPL Tura runtime fork
   -> terminal envelope / effect reconciliation
   -> destination-bound continuation and ACK
-  -> parent-owned MissionReadback
+  -> parent-owned MissionSnapshotReadback
 ```
 
 This is one review package, not one monolithic Python distribution. The split

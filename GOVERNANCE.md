@@ -33,7 +33,10 @@ A release requires:
 - an updated changelog;
 - review of public API and trust-boundary changes;
 - dependency, license, and secret checks appropriate to the release;
-- a source tag matching the packaged version.
+- an annotated source tag matching the packaged version and exact commit;
+- GitHub Actions pinned by full commit SHA;
+- a clean isolated wheel install, exact wheel/sdist checksums, and build
+  provenance attestation.
 
 A source commit, package candidate, published artifact, installed package, and
 running integration are distinct states. Release notes must say which state was

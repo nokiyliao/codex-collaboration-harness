@@ -10,7 +10,8 @@
 | Worker | Typed `ExecutionResult` | Result is correlated to the accepted packet/claim; unsettled identity is retained | Sandbox, credentials, quotas, effect containment |
 | Terminal receipt | In-process state | One accepted terminal transition per packet releases the exact task lease | Append-only or signed evidence when needed |
 | Continuation | Exact `Destination`, resume proof, and convergence proof | One stable continuation is retried; proofs match destination and receipt before three ACK identities are bound | Durable outbox, authenticated transport, and replay protection |
-| Mission verification | Exact parent-owned `MissionReadback` | Binds mission revision and predicate, then re-selects first false; task completion is insufficient | Authoritative current-state readers |
+| Mission verification | Exact parent-owned `MissionSnapshotReadback` | Binds mission revision, monotonic parent-state sequence, and complete predicate vector; task completion is insufficient | Authoritative current-state readers |
+| Model-assisted recovery | `BlockerReport` + `RecoveryProposal` | Deterministic admission enforces original scope, authority, effect, destination, predicate, verification plan, and budget | Durable recovery execution and sandbox policy |
 
 ## Assumptions
 
@@ -37,7 +38,9 @@ The reference is expected to reject or leave unacknowledged:
 - a second terminal result for an already terminal packet;
 - a callback to a different destination;
 - an ACK without matching convergence proof;
-- a callback retry that changes the prepared continuation identity;
+- a callback retry without exact authoritative delivery-absence proof;
+- a policy/authority blocker self-labelled as safe local recovery;
+- a stale parent snapshot overwriting a newer truth vector;
 - a duplicate ACK;
 - mission completion inferred only from worker prose or task terminal state.
 - mission completion inferred from a worker `predicate_satisfied` claim without

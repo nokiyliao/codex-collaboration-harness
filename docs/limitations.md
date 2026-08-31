@@ -7,7 +7,8 @@ This repository claims only that it provides:
 - a domain-neutral Python reference model of a closed parent/worker
   collaboration cycle;
 - explicit types for mission, predicate, route, task packet, ownership,
-  execution, terminal receipt, destination, convergence, and verification;
+  step/effect evidence, blocker/recovery proposal, terminal receipt,
+  destination delivery reconciliation, convergence, and verification;
 - deterministic in-memory behavior for the public fixtures;
 - fail-closed checks represented by the public test suite;
 - documentation of boundaries an integration must implement outside the core.
@@ -39,13 +40,14 @@ The reference does not yet supply:
 
 - a durable database or distributed fencing implementation;
 - crash-safe/outbox delivery and replay recovery;
-- signed or content-addressed receipt storage;
+- durable or signed receipt storage (individual reference records are
+  content-addressed in memory);
 - provider-specific continuation adapters;
 - worker sandboxing or credential isolation;
 - a public multi-process fault-injection suite;
 - exhaustive tests for every possible invalid record combination or adapter
   exception;
-- a published package/source-to-artifact identity receipt;
+- installed/running package identity closure;
 - an independent third-party reproduction.
 
 These are not silently delegated to the in-memory store. An integration must

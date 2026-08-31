@@ -27,6 +27,7 @@ reviewed the project.
    effects remain outside the package.
 6. Inspect the public Tura integration contract and conformance tests in
    [`tura-integration.md`](tura-integration.md).
+   Verify the packaged request/terminal schemas and golden vectors.
 7. Inspect the exact public AGPL component identities and maturity split in
    [`full-stack-profile.md`](full-stack-profile.md).
 8. Review [`provenance.md`](provenance.md) and scan the complete history for
@@ -45,11 +46,14 @@ implementation that makes a collaboration control loop explicit:
 - lease/CAS ownership modeling;
 - typed terminal receipt with exact task-lease release;
 - same-attempt effect reconciliation without executor replay;
-- exact callback destination, stable continuation recovery, and convergence
-  proof;
+- step-level effect identities, typed blockers, parent-bounded recovery budget,
+  and deterministic admission of model-generated recovery proposals;
+- exact callback destination and request identity, with authoritative absence
+  or convergence proof before recovery;
 - callback, receipt, and continuation ACK identities after convergence;
-- exact parent-owned `MissionReadback`, separate from the worker's advisory
-  predicate claim;
+- exact parent-owned `MissionSnapshotReadback`, including a complete truth
+  vector and monotonic parent-state sequence;
+- parent-authored route disposition and supersession evidence;
 - return to parent mission verification;
 - a transport-neutral Tura adapter contract that third parties can implement
   without importing a domain-specific application schema.
@@ -67,10 +71,12 @@ requiring a private agent runtime.
 | Ownership conflicts fail closed | Lease/CAS and terminal-release tests | Not a distributed lock |
 | Unsettled effects do not blindly retry | Same-attempt reconciliation test | Real settlement authority belongs to an adapter |
 | Callback requires convergence and stable retry identity | Destination/recovery/proof/ACK tests | No durable or authenticated network transport |
-| Task completion is not mission completion | Worker-claim versus parent-`MissionReadback` tests | Integration must supply an authoritative current reader |
+| Unknown callback delivery cannot blindly retry | Delivery-started/unsettled and absence/convergence reconciliation tests | Destination must supply authoritative readback |
+| Model recovery cannot expand its authority | Blocker, step ledger, recovery gate, budget, policy escalation, and duplicate-fingerprint tests | Production sandbox and policy remain external |
+| Task completion is not mission completion | Worker-claim versus parent-`MissionSnapshotReadback` tests | Integration must supply an authoritative current reader |
 | Runtime dependency surface is small | Package metadata and imports | Development/release tooling still requires review |
 | Tura is a usable implementation route | Public adapter, terminal envelope, fake client, and conformance tests | A real deployment still supplies transport, durability, credentials, and effect authority |
-| The modified runtime is inspectable | Public AGPL fork and exact component manifest | Public source is not installed/running acceptance |
+| The modified runtime is inspectable | Public AGPL fork, exact component manifest, and networked ref/tree/ancestry check | Public source is not installed/running acceptance |
 | Internal measurements motivated publication | Labeled aggregate summary | Underlying corpus is not public or reproducible here |
 
 ## Reviewer Questions
@@ -89,6 +95,9 @@ requiring a private agent runtime.
 - [ ] Clean checkout passes the canonical Python 3.11+ suite.
 - [ ] Exact test count and output are captured for the candidate commit.
 - [ ] Package metadata, tag, and changelog agree on version and MIT license.
+- [ ] CI and release actions are pinned by full commit SHA.
+- [ ] Built wheel passes a fresh isolated install and includes protocol resources.
+- [ ] Wheel/sdist checksums and GitHub provenance attestation are published.
 - [ ] Source archive matches the reviewed commit.
 - [ ] Full-history secret and private-data scan is clean.
 - [ ] Third-party code and asset inventory is complete.
@@ -103,7 +112,8 @@ source document does not create a self-referential claim about its own commit.
 
 ## Current Honest Disposition
 
-The public v0.1.1 source and package metadata are suitable for review. A passing
-suite establishes source behavior only. It does not establish installed
-adoption, a live Codex integration, production exactly-once delivery, or OpenAI
+The public v0.2.0 candidate is designed for source, artifact, and component
+lineage review. Release status belongs to the exact Git tag and attached
+artifacts, not this document. A passing suite still does not establish installed
+Tura adoption, a live Codex integration, production durability, or OpenAI
 acceptance.
