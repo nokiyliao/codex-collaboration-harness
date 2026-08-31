@@ -7,6 +7,13 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+### Changed
+
+- Introduce an internal adapter-contract facade and route the Tura adapter
+  through it, preserving the existing public classes, Enum identities, wire
+  names, and content-addressed records while reducing direct coupling to the
+  monolithic `core.py` implementation.
+
 ## [0.2.0] - 2026-08-31
 
 ### Breaking changes and migration

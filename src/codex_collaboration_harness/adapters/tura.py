@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Protocol, TypeAlias, TypeVar, cast
 
-from ..core import (
+from .._adapter_contracts import (
     Destination,
     EffectState,
     ExecutionFailure,
