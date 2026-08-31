@@ -97,11 +97,13 @@ requiring a private agent runtime.
 - [ ] Security advisory channel is enabled.
 - [ ] At least one independent clean-checkout reproduction is recorded.
 
-Unchecked boxes are open release predicates, not implied successes.
+This is a reviewer verification list, not mutable release state. Current CI,
+tag, archive, and artifact evidence belongs to the exact GitHub release so this
+source document does not create a self-referential claim about its own commit.
 
 ## Current Honest Disposition
 
-The repository is suitable for source review once its implementation and tests
-match the contracts above. A passing local suite establishes source behavior
-only. It does not establish package publication, installed adoption, a live
-Codex integration, production exactly-once delivery, or OpenAI acceptance.
+The public v0.1 source and package metadata are suitable for review. A passing
+suite establishes source behavior only. It does not establish installed
+adoption, a live Codex integration, production exactly-once delivery, or OpenAI
+acceptance.

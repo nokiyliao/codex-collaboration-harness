@@ -1,5 +1,9 @@
 # Codex Collaboration Harness
 
+[![CI](https://github.com/nokiyliao/codex-collaboration-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/nokiyliao/codex-collaboration-harness/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB.svg)](pyproject.toml)
+
 `codex-collaboration-harness` is a small, domain-neutral Python reference
 implementation for coordinating delegated agent work without transferring the
 parent mission to a worker.
@@ -23,7 +27,8 @@ Tura terminal envelope back into the core result/failure model. No private
 endpoint, credential, UTM shape, or Tura runtime source is required by the
 Python package.
 
-For full-stack review, the repository also binds the public AGPL runtime fork
+For full-stack review, the repository also binds the
+[public AGPL runtime fork](https://github.com/nokiyliao/tura)
 through [`components/tura-runtime.json`](components/tura-runtime.json). The
 manifest deliberately separates the public source ref, the benchmarked
 candidate, and any installed/running claim. See
