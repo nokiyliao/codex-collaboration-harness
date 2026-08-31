@@ -16,6 +16,7 @@ from ..core import (
     EffectState,
     ExecutionFailure,
     ExecutionResult,
+    ExecutorFailureSignal,
     FailureCode,
     Lease,
     TaskPacket,
@@ -124,6 +125,7 @@ class TuraTypedRejection:
     expected_request_id: str
     observed_request_id: str
     detail_digest: str
+    observed_effect_id: str | None = None
 
 
 class TuraClient(Protocol):
@@ -136,20 +138,33 @@ class TuraClient(Protocol):
 TuraDispatchOutcome: TypeAlias = ExecutionResult | ExecutionFailure | TuraTypedRejection
 
 
-class TuraRejectedError(RuntimeError):
+class TuraRejectedError(ExecutorFailureSignal):
     """Executor-facing wrapper for an explicit adapter rejection."""
 
-    def __init__(self, rejection: TuraTypedRejection) -> None:
+    def __init__(
+        self, rejection: TuraTypedRejection, packet: TaskPacket, lease: Lease
+    ) -> None:
         self.rejection = rejection
-        super().__init__(f"{rejection.code.value}: Tura envelope identity rejected")
+        payload = {
+            "packet_id": packet.packet_id,
+            "lease_id": lease.lease_id,
+            "failure_code": rejection.code,
+            "detail_digest": rejection.detail_digest,
+            "observed_effect_id": rejection.observed_effect_id,
+        }
+        super().__init__(
+            ExecutionFailure(
+                failure_id=f"execution_failure_{canonical_sha256(payload)}",
+                **payload,
+            )
+        )
 
 
-class TuraExecutionFailureError(RuntimeError):
+class TuraExecutionFailureError(ExecutorFailureSignal):
     """Executor-facing wrapper retaining the mapped ExecutionFailure."""
 
     def __init__(self, failure: ExecutionFailure) -> None:
-        self.failure = failure
-        super().__init__(f"{failure.failure_code.value}: Tura dispatch failed")
+        super().__init__(failure)
 
 
 def build_tura_dispatch_request(
@@ -290,6 +305,7 @@ class TuraAdapter:
                 expected_request_id=request.request_id,
                 observed_request_id=envelope.request_id,
                 detail_digest=detail_digest,
+                observed_effect_id=envelope.effect_id,
             )
         if envelope.kind is TuraTerminalKind.FAILURE:
             return _execution_failure(
@@ -316,7 +332,7 @@ class TuraAdapter:
             return outcome
         if isinstance(outcome, ExecutionFailure):
             raise TuraExecutionFailureError(outcome)
-        raise TuraRejectedError(outcome)
+        raise TuraRejectedError(outcome, packet, lease)
 
 
 __all__ = [

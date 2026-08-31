@@ -103,7 +103,7 @@ source document does not create a self-referential claim about its own commit.
 
 ## Current Honest Disposition
 
-The public v0.1 source and package metadata are suitable for review. A passing
+The public v0.1.1 source and package metadata are suitable for review. A passing
 suite establishes source behavior only. It does not establish installed
 adoption, a live Codex integration, production exactly-once delivery, or OpenAI
 acceptance.

@@ -11,8 +11,11 @@ from codex_collaboration_harness import (
     ExecutionResult,
     ExitPredicate,
     FailureCode,
+    FailureReconciliation,
+    HarnessViolation,
     Mission,
     Route,
+    TerminalStatus,
     canonical_sha256,
 )
 from codex_collaboration_harness.adapters.tura import (
@@ -28,7 +31,7 @@ from codex_collaboration_harness.adapters.tura import (
 EXECUTOR_ID = "executor.tura.public"
 
 
-def claimed_packet():
+def claimed_harness():
     mission = Mission(
         mission_id="mission.tura.synthetic",
         revision=1,
@@ -48,7 +51,12 @@ def claimed_packet():
     )
     harness = CollaborationHarness()
     packet = harness.plan(mission)
-    return packet, harness.claim(packet)
+    return harness, packet, harness.claim(packet)
+
+
+def claimed_packet():
+    _, packet, lease = claimed_harness()
+    return packet, lease
 
 
 class FakeTuraClient:
@@ -161,6 +169,7 @@ class TuraAdapterConformanceTests(unittest.TestCase):
         self.assertIsInstance(outcome, TuraTypedRejection)
         self.assertEqual(outcome.code, FailureCode.STALE_IDENTITY)
         self.assertEqual(outcome.mismatched_fields, ("packet_id",))
+        self.assertEqual(outcome.observed_effect_id, "effect.tura.synthetic.1")
         with self.assertRaises(TuraRejectedError) as caught:
             adapter.execute(packet, lease)
         self.assertEqual(
@@ -194,6 +203,194 @@ class TuraAdapterConformanceTests(unittest.TestCase):
         self.assertEqual(outcome.detail_digest, detail_digest)
         self.assertEqual(outcome.packet_id, packet.packet_id)
         self.assertIsNone(outcome.observed_effect_id)
+
+
+class TuraCoreCompositionTests(unittest.TestCase):
+    def assert_code(self, expected: FailureCode, operation) -> HarnessViolation:
+        with self.assertRaises(HarnessViolation) as caught:
+            operation()
+        self.assertEqual(caught.exception.code, expected)
+        return caught.exception
+
+    def test_settled_failure_identity_survives_core_boundary_without_rerun(
+        self,
+    ) -> None:
+        harness, packet, lease = claimed_harness()
+        detail_digest = canonical_sha256({"failure": "cas conflict"})
+
+        def settled_failure(request):
+            return TuraTerminalEnvelope(
+                request_id=request.request_id,
+                packet_id=request.packet_id,
+                lease_id=request.lease_id,
+                executor_id=request.executor_id,
+                kind=TuraTerminalKind.FAILURE,
+                effect_state=EffectState.SETTLED,
+                effect_id="effect.tura.real.7",
+                output_digest=canonical_sha256({"terminal": "failed"}),
+                predicate_satisfied=False,
+                failure_code=FailureCode.CAS_MISMATCH,
+                failure_detail_digest=detail_digest,
+            )
+
+        client = FakeTuraClient(settled_failure)
+        adapter = TuraAdapter(client, EXECUTOR_ID)
+
+        self.assert_code(
+            FailureCode.CAS_MISMATCH,
+            lambda: harness.execute(packet, lease, adapter),
+        )
+        failure = harness.store.failure_for_packet(packet.packet_id)
+        self.assertEqual(failure.failure_code, FailureCode.CAS_MISMATCH)
+        self.assertEqual(failure.detail_digest, detail_digest)
+        self.assertEqual(failure.observed_effect_id, "effect.tura.real.7")
+        self.assertEqual(harness.store.snapshot().effect_count, 1)
+        self.assertEqual(harness.store.snapshot().active_lease_count, 1)
+        self.assertEqual(harness.store.snapshot().terminal_receipt_count, 0)
+        self.assert_code(
+            FailureCode.DUPLICATE_OR_REPLAY,
+            lambda: harness.execute(packet, lease, adapter),
+        )
+        self.assertEqual(len(client.requests), 1)
+
+        receipt = harness.reconcile_failure(
+            packet,
+            lease,
+            FailureReconciliation(
+                packet_id=packet.packet_id,
+                lease_id=lease.lease_id,
+                failure_code=FailureCode.CAS_MISMATCH,
+                effect_state=EffectState.SETTLED,
+                effect_id="effect.tura.real.7",
+                proof_digest=canonical_sha256(
+                    {"effect_id": "effect.tura.real.7", "settled": True}
+                ),
+                output_digest=canonical_sha256({"terminal": "reconciled"}),
+            ),
+        )
+        self.assertEqual(receipt.status, TerminalStatus.FAILED)
+        self.assertEqual(receipt.failure_code, FailureCode.CAS_MISMATCH)
+        self.assertEqual(receipt.effect_id, "effect.tura.real.7")
+        self.assertEqual(harness.store.snapshot().active_lease_count, 0)
+        self.assertEqual(harness.store.snapshot().effect_count, 1)
+
+    def test_typed_rejection_preserves_observed_effect_for_reconciliation(
+        self,
+    ) -> None:
+        harness, packet, lease = claimed_harness()
+
+        def wrong_identity(request):
+            envelope = result_envelope(request, EffectState.SETTLED)
+            return TuraTerminalEnvelope(
+                request_id=envelope.request_id,
+                packet_id="packet.changed",
+                lease_id=envelope.lease_id,
+                executor_id=envelope.executor_id,
+                kind=envelope.kind,
+                effect_state=envelope.effect_state,
+                effect_id=envelope.effect_id,
+                output_digest=envelope.output_digest,
+                predicate_satisfied=envelope.predicate_satisfied,
+            )
+
+        client = FakeTuraClient(wrong_identity)
+        adapter = TuraAdapter(client, EXECUTOR_ID)
+        expected_detail_digest = canonical_sha256(
+            {"kind": "terminal_identity_mismatch", "fields": ("packet_id",)}
+        )
+
+        self.assert_code(
+            FailureCode.STALE_IDENTITY,
+            lambda: harness.execute(packet, lease, adapter),
+        )
+        failure = harness.store.failure_for_packet(packet.packet_id)
+        self.assertEqual(failure.failure_code, FailureCode.STALE_IDENTITY)
+        self.assertEqual(failure.detail_digest, expected_detail_digest)
+        self.assertEqual(
+            failure.observed_effect_id,
+            "effect.tura.synthetic.1",
+        )
+        self.assertEqual(harness.store.snapshot().effect_count, 1)
+        self.assertEqual(harness.store.snapshot().active_lease_count, 1)
+        self.assert_code(
+            FailureCode.DUPLICATE_OR_REPLAY,
+            lambda: harness.execute(packet, lease, adapter),
+        )
+        self.assertEqual(len(client.requests), 1)
+
+        receipt = harness.reconcile_failure(
+            packet,
+            lease,
+            FailureReconciliation(
+                packet_id=packet.packet_id,
+                lease_id=lease.lease_id,
+                failure_code=FailureCode.STALE_IDENTITY,
+                effect_state=EffectState.SETTLED,
+                effect_id="effect.tura.synthetic.1",
+                proof_digest=canonical_sha256(
+                    {"effect_id": "effect.tura.synthetic.1", "settled": True}
+                ),
+                output_digest=canonical_sha256({"terminal": "reconciled"}),
+            ),
+        )
+        self.assertEqual(receipt.status, TerminalStatus.FAILED)
+        self.assertEqual(receipt.effect_id, "effect.tura.synthetic.1")
+        self.assertEqual(harness.store.snapshot().active_lease_count, 0)
+
+    def test_none_failure_identity_survives_until_explicit_no_effect_proof(
+        self,
+    ) -> None:
+        harness, packet, lease = claimed_harness()
+        detail_digest = canonical_sha256({"failure": "no effect terminal"})
+
+        def none_failure(request):
+            return TuraTerminalEnvelope(
+                request_id=request.request_id,
+                packet_id=request.packet_id,
+                lease_id=request.lease_id,
+                executor_id=request.executor_id,
+                kind=TuraTerminalKind.FAILURE,
+                effect_state=EffectState.NONE,
+                effect_id=None,
+                output_digest=canonical_sha256({"terminal": "failed"}),
+                predicate_satisfied=False,
+                failure_code=FailureCode.EXECUTOR_ERROR,
+                failure_detail_digest=detail_digest,
+            )
+
+        client = FakeTuraClient(none_failure)
+        adapter = TuraAdapter(client, EXECUTOR_ID)
+        self.assert_code(
+            FailureCode.EXECUTOR_ERROR,
+            lambda: harness.execute(packet, lease, adapter),
+        )
+        failure = harness.store.failure_for_packet(packet.packet_id)
+        self.assertEqual(failure.detail_digest, detail_digest)
+        self.assertIsNone(failure.observed_effect_id)
+        self.assertEqual(harness.store.snapshot().effect_count, 0)
+        self.assertEqual(harness.store.snapshot().active_lease_count, 1)
+        self.assert_code(
+            FailureCode.DUPLICATE_OR_REPLAY,
+            lambda: harness.execute(packet, lease, adapter),
+        )
+        self.assertEqual(len(client.requests), 1)
+
+        receipt = harness.reconcile_failure(
+            packet,
+            lease,
+            FailureReconciliation(
+                packet_id=packet.packet_id,
+                lease_id=lease.lease_id,
+                failure_code=FailureCode.EXECUTOR_ERROR,
+                effect_state=EffectState.NONE,
+                effect_id=None,
+                proof_digest=canonical_sha256({"effect": "none", "proved": True}),
+                output_digest=canonical_sha256({"terminal": "reconciled"}),
+            ),
+        )
+        self.assertEqual(receipt.effect_state, EffectState.NONE)
+        self.assertEqual(harness.store.snapshot().active_lease_count, 0)
+        self.assertEqual(harness.store.snapshot().effect_count, 0)
 
 
 if __name__ == "__main__":

@@ -292,6 +292,16 @@ class ExecutionFailure:
     observed_effect_id: str | None
 
 
+class ExecutorFailureSignal(RuntimeError):
+    """Generic structured signal preserving an executor's failure identity."""
+
+    def __init__(self, failure: ExecutionFailure) -> None:
+        for name in ("packet_id", "lease_id", "detail_digest"):
+            _require_text(name, getattr(failure, name))
+        self.failure = failure
+        super().__init__(f"{failure.failure_code.value}: structured executor failure")
+
+
 @dataclass(frozen=True, slots=True)
 class FailureReconciliation:
     """Explicit proof that a failed attempt had no effect or a settled effect."""
@@ -708,7 +718,7 @@ class InMemoryStore:
         packet: TaskPacket,
         lease: Lease,
         code: FailureCode,
-        detail: str,
+        detail_digest: str,
         *,
         observed_effect_id: str | None = None,
     ) -> ExecutionFailure:
@@ -727,13 +737,7 @@ class InMemoryStore:
                 FailureCode.DUPLICATE_OR_REPLAY,
                 "execution failure was already recorded or terminalized",
             )
-        detail_digest = canonical_sha256(
-            {
-                "failure_code": code,
-                "detail": detail,
-                "observed_effect_id": observed_effect_id,
-            }
-        )
+        _require_text("detail_digest", detail_digest)
         payload = {
             "packet_id": packet.packet_id,
             "lease_id": lease.lease_id,
@@ -837,7 +841,13 @@ class InMemoryStore:
                 packet,
                 lease,
                 FailureCode.STALE_IDENTITY,
-                "executor result identity does not match packet, executor, and lease",
+                canonical_sha256(
+                    {
+                        "kind": "executor_result_identity_mismatch",
+                        "packet_id": packet.packet_id,
+                        "lease_id": lease.lease_id,
+                    }
+                ),
                 observed_effect_id=result.effect_id,
             )
             raise HarnessViolation(
@@ -850,7 +860,13 @@ class InMemoryStore:
                 packet,
                 lease,
                 FailureCode.DUPLICATE_OR_REPLAY,
-                f"effect {result.effect_id!r} is already owned by packet {owner}",
+                canonical_sha256(
+                    {
+                        "kind": "duplicate_effect_identity",
+                        "effect_id": result.effect_id,
+                        "existing_owner": owner,
+                    }
+                ),
                 observed_effect_id=result.effect_id,
             )
             raise HarnessViolation(
@@ -1200,12 +1216,45 @@ class CollaborationHarness:
             raise
         try:
             result = executor.execute(packet, lease)
+        except ExecutorFailureSignal as signal:
+            failure = signal.failure
+            if (
+                failure.packet_id != packet.packet_id
+                or failure.lease_id != lease.lease_id
+            ):
+                code = FailureCode.STALE_IDENTITY
+                detail_digest = canonical_sha256(
+                    {
+                        "kind": "structured_failure_identity_mismatch",
+                        "source_detail_digest": failure.detail_digest,
+                    }
+                )
+            else:
+                code = failure.failure_code
+                detail_digest = failure.detail_digest
+            self.store.record_execution_failure(
+                packet,
+                lease,
+                code,
+                detail_digest,
+                observed_effect_id=failure.observed_effect_id,
+            )
+            raise HarnessViolation(
+                code,
+                "executor reported a structured failure; reconciliation is required",
+            ) from signal
         except Exception as error:
             self.store.record_execution_failure(
                 packet,
                 lease,
                 FailureCode.EXECUTOR_ERROR,
-                f"{type(error).__name__}: {error}",
+                canonical_sha256(
+                    {
+                        "kind": "executor_exception",
+                        "error_type": type(error).__name__,
+                        "message_digest": canonical_sha256(str(error)),
+                    }
+                ),
             )
             raise HarnessViolation(
                 FailureCode.EXECUTOR_ERROR,

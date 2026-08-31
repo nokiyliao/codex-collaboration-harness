@@ -42,7 +42,7 @@ artifacts under `dist/`.
 On 2026-08-31, the current source tree produced:
 
 - exact complete-cycle selector: `Ran 1 test` and `OK`;
-- full suite: `Ran 30 tests` and `OK`;
+- full suite: `Ran 33 tests` and `OK`;
 - review-readiness scan: 41 authored public files, passed;
 - evidence-manifest integrity: 1 covered artifact, passed;
 - synthetic demo and import smoke check: passed.
@@ -74,7 +74,7 @@ runtime.
 
 ## Invariant Matrix
 
-The current v0.1 suite contains 30 tests. Its direct evidence is:
+The current v0.1.1 suite contains 33 tests. Its direct evidence is:
 
 | Test area | Direct observation |
 |---|---|
@@ -105,9 +105,10 @@ The current v0.1 suite contains 30 tests. Its direct evidence is:
 | Tura unsettled effect | The exact effect identity remains unsettled for core reconciliation rather than being retried |
 | Tura transport/terminal failure | Transport exceptions and explicit terminal failures become deterministic typed failures |
 | Tura identity closure | Packet, lease, request, and executor drift is rejected before becoming a core result |
+| Tura/core failure composition | Execution failures and typed rejections preserve the exact failure code, detail digest, and observed effect across the adapter-to-core boundary; a second execution is blocked until explicit `NONE` or `SETTLED` reconciliation |
 
 The implementation has additional structural validation, and future paths may
-need new dedicated fixtures. Public evidence is limited to the 30 tests
+need new dedicated fixtures. Public evidence is limited to the 33 tests
 above and the exact source under review.
 
 ## Reproduction Record

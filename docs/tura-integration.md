@@ -59,9 +59,11 @@ unsettled for the core reconciliation path. The adapter never retries a Tura
 request and never guesses that an interrupted request had no effect.
 
 `TuraAdapter.execute()` implements the core `Executor` protocol for settled
-success. Typed adapter failures are raised with their structured records still
-available to the host, which must reconcile the failed attempt before releasing
-its lease.
+success. Typed adapter failures use the generic core `ExecutorFailureSignal`,
+so the failure code, detail digest, and observed effect identity survive the
+adapter-to-harness boundary. The host must reconcile that same failed attempt
+before releasing its lease; a second execution is rejected before another Tura
+request can be sent.
 
 ## Responsibilities Outside This Package
 
@@ -88,8 +90,10 @@ PYTHONPATH=src python3 -m unittest tests.test_tura_adapter -v
 ```
 
 The public fake-client suite covers settled success, unsettled effect
-preservation, transport exception, typed terminal failure, and terminal identity
-mismatch. It uses no network, credential, private corpus, or installed runtime.
+preservation, transport exception, typed terminal failure, terminal identity
+mismatch, and adapter-to-core failure composition for both settled-effect and
+proven-no-effect paths. It uses no network, credential, private corpus, or
+installed runtime.
 
 ## Versioned Runtime Component
 
