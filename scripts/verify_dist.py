@@ -16,12 +16,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 REQUIRED_PACKAGE_MEMBERS = (
+    "codex_collaboration_harness/agents/tura.toml",
     "codex_collaboration_harness/py.typed",
     "codex_collaboration_harness/protocol/tura_dispatch_request_v1.schema.json",
     "codex_collaboration_harness/protocol/tura_terminal_envelope_v1.schema.json",
     "codex_collaboration_harness/protocol/golden/tura_dispatch_request_v1.json",
     "codex_collaboration_harness/protocol/golden/tura_result_v1.json",
     "codex_collaboration_harness/protocol/golden/tura_failure_v1.json",
+)
+NATIVE_TURA_ROLE_SHA256 = (
+    "66fe64b57770f1155770e234706d074d55e467c15fc47c99683b2f43918cfb3b"
 )
 
 
@@ -40,9 +44,22 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _verify_role_bytes(role_bytes: bytes, source: str) -> None:
+    if hashlib.sha256(role_bytes).hexdigest() != NATIVE_TURA_ROLE_SHA256:
+        raise RuntimeError(f"{source} Native Tura role digest differs")
+    try:
+        role = tomllib.loads(role_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        raise RuntimeError(f"{source} Native Tura role is invalid: {error}") from error
+    if role.get("name") != "tura":
+        raise RuntimeError(f"{source} Native Tura role name differs")
+
+
 def _verify_members(wheel: Path, sdist: Path) -> None:
+    role_member = "codex_collaboration_harness/agents/tura.toml"
     with zipfile.ZipFile(wheel) as archive:
         wheel_members = set(archive.namelist())
+        _verify_role_bytes(archive.read(role_member), "wheel")
     for member in REQUIRED_PACKAGE_MEMBERS:
         if member not in wheel_members:
             raise RuntimeError(f"wheel is missing {member}")
@@ -52,6 +69,19 @@ def _verify_members(wheel: Path, sdist: Path) -> None:
         if any(item.issym() or item.islnk() for item in members):
             raise RuntimeError("sdist must not contain symlink or hardlink members")
         names = {item.name for item in members}
+        role_matches = [
+            item
+            for item in members
+            if item.name.endswith(f"/src/{role_member}") and item.isfile()
+        ]
+        if len(role_matches) != 1:
+            raise RuntimeError(
+                f"sdist must contain one Native Tura role, found {role_matches}"
+            )
+        role_stream = archive.extractfile(role_matches[0])
+        if role_stream is None:
+            raise RuntimeError("sdist Native Tura role cannot be read")
+        _verify_role_bytes(role_stream.read(), "sdist")
     for member in REQUIRED_PACKAGE_MEMBERS:
         suffix = f"/src/{member}"
         if not any(name.endswith(suffix) for name in names):
@@ -77,7 +107,7 @@ def _verify_clean_install(wheel: Path, version: str) -> None:
             check=True,
         )
         check = (
-            "import json; "
+            "import hashlib, json, tomllib; "
             "from importlib.metadata import version; "
             "from importlib.resources import files; "
             "import codex_collaboration_harness as harness; "
@@ -87,6 +117,12 @@ def _verify_clean_install(wheel: Path, version: str) -> None:
             "assert json.loads(schema.read_text(encoding='utf-8'))"
             "['properties']['protocol_version']['const'] == "
             "'tura-collaboration/v1'; "
+            "role = files('codex_collaboration_harness').joinpath("
+            "'agents', 'tura.toml'); "
+            "role_bytes = role.read_bytes(); "
+            f"assert hashlib.sha256(role_bytes).hexdigest() == "
+            f"{NATIVE_TURA_ROLE_SHA256!r}; "
+            "assert tomllib.loads(role_bytes.decode('utf-8'))['name'] == 'tura'; "
             "print(harness.__file__)"
         )
         subprocess.run([str(python), "-I", "-c", check], cwd=root, check=True)

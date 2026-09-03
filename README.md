@@ -21,14 +21,22 @@ It is intentionally an in-memory reference, not an agent runtime, workflow
 service, sandbox, durable queue, or authorization system. Integrators provide
 the actual worker, persistence, effect, and callback adapters.
 
-The package also includes a first-class, transport-neutral
+The preferred Codex deployment profile packages Tura as a thin native agent
+role. Native Codex remains the sole owner of task persistence, child lifecycle,
+tools, and direct-parent callback; the role contributes only bounded execution
+policy. The exact installable role is
+[`agents/tura.toml`](src/codex_collaboration_harness/agents/tura.toml), with the
+topology and drift-safe installation procedure documented in
+[`docs/native-tura-role.md`](docs/native-tura-role.md).
+
+The package also retains an optional, transport-neutral
 [`TuraAdapter`](src/codex_collaboration_harness/adapters/tura.py). It turns the
 generic task/lease contract into a bounded Tura request and maps a third-party
 Tura terminal envelope back into the core result/failure model. No private
 endpoint, credential, UTM shape, or Tura runtime source is required by the
 Python package.
 
-For full-stack review, the repository also binds the
+For review of the historical external-runtime profile, the repository binds the
 [public AGPL runtime fork](https://github.com/nokiyliao/tura)
 through [`components/tura-runtime.json`](components/tura-runtime.json). The
 manifest deliberately separates the public source ref, the benchmarked
@@ -153,6 +161,7 @@ reference to production effects.
 | Reviewer question | Public evidence |
 |---|---|
 | What is the collaboration graph? | [`docs/architecture.md`](docs/architecture.md) |
+| How is Tura installed as a thin Native Codex role? | [`docs/native-tura-role.md`](docs/native-tura-role.md) |
 | What constitutes the reviewable full stack? | [`docs/full-stack-profile.md`](docs/full-stack-profile.md) |
 | Which boundaries are enforced here? | [`docs/trust-boundaries.md`](docs/trust-boundaries.md) |
 | What can I reproduce? | [`docs/verification.md`](docs/verification.md) |

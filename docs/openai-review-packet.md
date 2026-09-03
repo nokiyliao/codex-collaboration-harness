@@ -25,7 +25,9 @@ reviewed the project.
 
 5. Review [`trust-boundaries.md`](trust-boundaries.md) and confirm external
    effects remain outside the package.
-6. Inspect the public Tura integration contract and conformance tests in
+6. Inspect the preferred thin Native Tura role in
+   [`native-tura-role.md`](native-tura-role.md), then inspect the optional
+   external Tura integration contract and conformance tests in
    [`tura-integration.md`](tura-integration.md).
    Verify the packaged request/terminal schemas and golden vectors.
 7. Inspect the exact public AGPL component identities and maturity split in
@@ -55,6 +57,8 @@ implementation that makes a collaboration control loop explicit:
   vector and monotonic parent-state sequence;
 - parent-authored route disposition and supersession evidence;
 - return to parent mission verification;
+- a packaged thin Native Tura role that delegates persistence, lifecycle,
+  tools, effects, and callback ownership to Native Codex;
 - a transport-neutral Tura adapter contract that third parties can implement
   without importing a domain-specific application schema.
 
@@ -75,7 +79,8 @@ requiring a private agent runtime.
 | Model recovery cannot expand its authority | Blocker, step ledger, recovery gate, budget, policy escalation, and duplicate-fingerprint tests | Production sandbox and policy remain external |
 | Task completion is not mission completion | Worker-claim versus parent-`MissionSnapshotReadback` tests | Integration must supply an authoritative current reader |
 | Runtime dependency surface is small | Package metadata and imports | Development/release tooling still requires review |
-| Tura is a usable implementation route | Public adapter, terminal envelope, fake client, and conformance tests | A real deployment still supplies transport, durability, credentials, and effect authority |
+| Native Tura is a portable Codex role | Packaged exact role bytes, source-resource test, wheel/sdist member verification, and Native ownership documentation | A real Codex deployment must still prove role discovery and direct-parent callback |
+| External Tura remains an optional implementation route | Public adapter, terminal envelope, fake client, and conformance tests | A real external deployment still supplies transport, durability, credentials, and effect authority |
 | The modified runtime is inspectable | Public AGPL fork, exact component manifest, and networked ref/tree/ancestry check | Public source is not installed/running acceptance |
 | Internal measurements motivated publication | Labeled aggregate summary | Underlying corpus is not public or reproducible here |
 
@@ -112,7 +117,7 @@ source document does not create a self-referential claim about its own commit.
 
 ## Current Honest Disposition
 
-The public v0.2.0 candidate is designed for source, artifact, and component
+The public v0.2.1 candidate is designed for source, artifact, and component
 lineage review. Release status belongs to the exact Git tag and attached
 artifacts, not this document. A passing suite still does not establish installed
 Tura adoption, a live Codex integration, production durability, or OpenAI

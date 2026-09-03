@@ -1,12 +1,19 @@
 # Tura Integration Kit
 
+> **Profile boundary:** This document describes the optional external-runtime
+> adapter. The preferred Native Codex profile uses the packaged
+> [`agents/tura.toml`](../src/codex_collaboration_harness/agents/tura.toml)
+> directly and does not call `TuraAdapter`, start a Tura service, or depend on
+> `components/tura-runtime.json`. See
+> [`native-tura-role.md`](native-tura-role.md).
+
 ## Purpose
 
-Tura is the primary full-stack executor route that motivated this public
-integration. The Python package does not embed a Tura server or assume a
-domain-specific repository. Instead, it exposes the smallest contract a third
-party needs to connect a Tura deployment while preserving the collaboration
-graph's identity, effect, and callback boundaries.
+The external Tura runtime was the full-stack executor route that motivated this
+public compatibility profile. The Python package does not embed a Tura server
+or assume a domain-specific repository. Instead, it exposes the smallest
+contract a third party needs to connect an external Tura deployment while
+preserving the collaboration graph's identity, effect, and callback boundaries.
 
 The integration lives in
 [`codex_collaboration_harness.adapters.tura`](../src/codex_collaboration_harness/adapters/tura.py).

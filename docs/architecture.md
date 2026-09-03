@@ -35,6 +35,31 @@ flowchart LR
 Dashed edges are deliberately outside this package. The reference store and
 worker are in-process test doubles for their contracts.
 
+## Preferred Native Codex Deployment
+
+The packaged Native Tura role removes the external lifecycle boundary from a
+Codex deployment:
+
+```text
+operator / parent mission
+  -> Native Codex task runtime
+       owns persistence, child lifecycle, tools, effects and callback
+  -> Tura agent role
+       contributes first-false routing and bounded execution policy only
+  -> Native Codex direct-parent callback
+  -> parent mission verification or route selection
+```
+
+The role is selected explicitly for a child task; ordinary Codex roles do not
+inherit it. It does not start a Gateway, Router, Session DB, provider runtime,
+daemon, queue, MCP relay, or second callback transport. This is a single-owner
+architecture: Tura changes executor behavior without acquiring storage,
+lifecycle, or thread ownership.
+
+The external worker graph above remains the portable reference contract and an
+optional compatibility profile. It is not a runtime dependency of the Native
+Codex role.
+
 ## Decision Record
 
 Every delegated packet preserves five fields:

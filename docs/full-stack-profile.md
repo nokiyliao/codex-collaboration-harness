@@ -1,8 +1,27 @@
 # Full-Stack Review Profile
 
-## Reviewable Stack
+## Preferred Native Stack
 
-The public project is intentionally split by responsibility and license:
+The lowest-cost deployment uses Native Codex as the only runtime owner:
+
+```text
+parent mission / ordered predicates
+  -> Native Codex task persistence and lifecycle
+  -> packaged thin Tura agent role
+  -> native tools and effects
+  -> native direct-parent callback
+  -> parent mission verification
+```
+
+This path uses no Tura Gateway, Router, Session DB, provider lifecycle, daemon,
+MCP relay, or second callback transport. The Python collaboration core remains
+an executable reference for the contract rather than a second production state
+machine.
+
+## Optional External-Runtime Review Profile
+
+The public project also preserves an external-runtime profile for portability,
+historical provenance, and review of the modified Rust implementation:
 
 ```text
 parent mission / ordered predicates
@@ -14,9 +33,9 @@ parent mission / ordered predicates
   -> parent-owned MissionSnapshotReadback
 ```
 
-This is one review package, not one monolithic Python distribution. The split
-keeps the generic protocol reusable while making the real runtime engineering
-available to third parties.
+This is an optional review package, not a dependency of the preferred Native
+Codex deployment. The split keeps the generic protocol reusable while making
+the earlier runtime engineering inspectable to third parties.
 
 ## Components
 
@@ -24,7 +43,8 @@ available to third parties.
 |---|---|---|---|
 | Collaboration core | Mission, first-false routing, lease/CAS, terminal receipt, continuation, ACK, parent readback | MIT | `src/codex_collaboration_harness/core.py`, synthetic tests |
 | Tura integration kit | Stable request/envelope mapping and fail-closed adapter behavior | MIT | `src/codex_collaboration_harness/adapters/tura.py`, conformance tests |
-| Modified Tura runtime | Gateway, Router, runtime/session lifecycle, commands, receipts, recovery, callback and provider execution | AGPL-3.0-or-later | Public fork and exact `components/tura-runtime.json` identities |
+| Native Tura role | Bounded execution policy; Native Codex retains persistence, lifecycle, tools, and callback | MIT | `agents/tura.toml`, resource and distribution tests |
+| Modified Tura runtime | Optional external/legacy profile for Gateway, Router, runtime/session lifecycle, commands, receipts, recovery, callback and provider execution | AGPL-3.0-or-later | Public fork and exact `components/tura-runtime.json` identities |
 | Internal benchmark projection | Motivation and bounded aggregate engineering observations | Evidence only | Sanitized JSON, integrity manifest, explicit non-causal limitations |
 
 No UTM repository, task corpus, account state, broker surface, raw conversation,

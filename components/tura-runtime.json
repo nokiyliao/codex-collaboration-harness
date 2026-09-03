@@ -1,7 +1,7 @@
 {
   "schema_version": "public_runtime_component_v1",
   "component_id": "tura-collaboration-runtime",
-  "role": "full_stack_executor_runtime",
+  "role": "optional_legacy_external_executor_runtime",
   "license": "AGPL-3.0-or-later",
   "repository": "https://github.com/nokiyliao/tura",
   "public_ref": "refs/heads/codex/collaboration-runtime-public-v0.1.0",

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
@@ -25,6 +26,7 @@ REQUIRED_PATHS = (
     ".github/pull_request_template.md",
     "src/codex_collaboration_harness/__init__.py",
     "src/codex_collaboration_harness/core.py",
+    "src/codex_collaboration_harness/agents/tura.toml",
     "src/codex_collaboration_harness/py.typed",
     "tests/test_harness.py",
     "tests/test_tura_adapter.py",
@@ -38,6 +40,7 @@ REQUIRED_PATHS = (
     "src/codex_collaboration_harness/adapters/__init__.py",
     "src/codex_collaboration_harness/adapters/tura.py",
     "docs/tura-integration.md",
+    "docs/native-tura-role.md",
     "docs/full-stack-profile.md",
     "components/tura-runtime.json",
     "src/codex_collaboration_harness/protocol/tura_terminal_envelope_v1.schema.json",
@@ -45,6 +48,9 @@ REQUIRED_PATHS = (
     "src/codex_collaboration_harness/protocol/golden/tura_dispatch_request_v1.json",
     "src/codex_collaboration_harness/protocol/golden/tura_result_v1.json",
     "src/codex_collaboration_harness/protocol/golden/tura_failure_v1.json",
+)
+NATIVE_TURA_ROLE_SHA256 = (
+    "66fe64b57770f1155770e234706d074d55e467c15fc47c99683b2f43918cfb3b"
 )
 EXCLUDED_DIRECTORIES = {
     ".git",
@@ -259,6 +265,8 @@ def _check_tura_component(errors: list[str]) -> None:
         errors.append(
             "Tura component schema_version must be public_runtime_component_v1"
         )
+    if data.get("role") != "optional_legacy_external_executor_runtime":
+        errors.append("Tura component must be classified as an optional legacy runtime")
     if data.get("license") != "AGPL-3.0-or-later":
         errors.append("Tura component license must be AGPL-3.0-or-later")
     repository = data.get("repository")
@@ -284,6 +292,35 @@ def _check_tura_component(errors: list[str]) -> None:
         errors.append("Tura benchmark candidate boundary is missing")
     if evidence.get("installed_or_running") != "NOT_CLAIMED":
         errors.append("Tura component must not claim installed or running adoption")
+
+
+def _check_native_tura_role(errors: list[str]) -> None:
+    path = ROOT / "src" / "codex_collaboration_harness" / "agents" / "tura.toml"
+    try:
+        role_bytes = path.read_bytes()
+        role = tomllib.loads(role_bytes.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        errors.append(f"invalid Native Tura role: {error}")
+        return
+
+    if hashlib.sha256(role_bytes).hexdigest() != NATIVE_TURA_ROLE_SHA256:
+        errors.append("Native Tura role digest differs from the reviewed profile")
+    if role.get("name") != "tura":
+        errors.append("Native Tura role name must be tura")
+    instructions = role.get("developer_instructions")
+    if not isinstance(instructions, str):
+        errors.append("Native Tura role developer_instructions must be a string")
+        return
+    for required in (
+        "existing Codex session, tools, persistence, and parent callback",
+        "FIRST_FALSE_PREDICATE",
+        "SHORTEST_VALID_ROUTE",
+        "EXPECTED_PREDICATE_DELTA",
+        "ABANDON_IF",
+        "Do not create another goal, database, lifecycle owner",
+    ):
+        if required not in instructions:
+            errors.append(f"Native Tura role is missing {required!r}")
 
 
 def _check_public_content(errors: list[str]) -> None:
@@ -322,6 +359,7 @@ def main() -> int:
     _check_spdx(errors)
     _check_benchmark_label(errors)
     _check_tura_component(errors)
+    _check_native_tura_role(errors)
     _check_public_content(errors)
 
     if errors:

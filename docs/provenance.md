@@ -18,7 +18,8 @@ The contribution boundary is intentionally explicit:
 | System | Relationship | Included here? |
 |---|---|---|
 | OpenAI Codex | Intended collaboration context and external runtime family | No OpenAI source, service code, or private API material |
-| Tura | Primary runtime lineage for lifecycle, receipt, recovery, and continuation engineering | No Tura source is vendored into the MIT wheel; the public AGPL fork is bound by an exact component manifest and connected through the MIT adapter |
+| Native Tura role | Preferred thin execution-policy profile for Native Codex | The exact MIT role resource is packaged; Native Codex retains persistence, lifecycle, tools, effects, and callback ownership |
+| External Tura runtime | Historical and optional lineage for lifecycle, receipt, recovery, and continuation engineering | No Tura source is vendored into the MIT wheel; the public AGPL fork is bound by an exact component manifest and connected only through the optional MIT adapter |
 | Deep Context Federation | Separate public MIT companion/inspiration for read-only evidence reconstruction | No vendored code and no runtime dependency |
 | Private collaboration deployments | Engineering experience that motivated the generic control graph | No corpus, raw receipt, local identity, or deployment configuration |
 

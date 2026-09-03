@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: MIT
 from __future__ import annotations
 
+import hashlib
 import json
+import tomllib
 import unittest
 from dataclasses import asdict
 from importlib.resources import files
@@ -93,6 +95,32 @@ def result_envelope(request, effect_state: EffectState) -> TuraTerminalEnvelope:
 
 
 class TuraAdapterConformanceTests(unittest.TestCase):
+    def test_native_tura_role_resource(self) -> None:
+        role_bytes = (
+            files("codex_collaboration_harness")
+            .joinpath("agents", "tura.toml")
+            .read_bytes()
+        )
+        self.assertEqual(
+            hashlib.sha256(role_bytes).hexdigest(),
+            "66fe64b57770f1155770e234706d074d55e467c15fc47c99683b2f43918cfb3b",
+        )
+        role = tomllib.loads(role_bytes.decode("utf-8"))
+        self.assertEqual(role["name"], "tura")
+        instructions = role["developer_instructions"]
+        self.assertIn(
+            "existing Codex session, tools, persistence, and parent callback",
+            instructions,
+        )
+        self.assertIn(
+            "Do not create another goal, database, lifecycle owner",
+            instructions,
+        )
+        self.assertIn(
+            "return the first exact typed blocker to the direct parent",
+            instructions,
+        )
+
     def test_tura_dispatch_golden_vector_matches_request_identity(self) -> None:
         golden = json.loads(
             files("codex_collaboration_harness")

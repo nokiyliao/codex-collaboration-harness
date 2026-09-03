@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codex-collaboration-harness"
-version = "0.2.0"
+version = "0.2.1"
 description = "A deterministic, domain-neutral harness for bounded multi-agent collaboration."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -45,6 +45,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 codex_collaboration_harness = [
+  "agents/*.toml",
   "py.typed",
   "protocol/*.json",
   "protocol/golden/*.json",

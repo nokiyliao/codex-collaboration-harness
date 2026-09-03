@@ -7,12 +7,19 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-03
+
 ### Changed
 
 - Introduce an internal adapter-contract facade and route the Tura adapter
   through it, preserving the existing public classes, Enum identities, wire
   names, and content-addressed records while reducing direct coupling to the
   monolithic `core.py` implementation.
+- Package the reviewed thin Native Tura agent role and document Native Codex as
+  the sole persistence, lifecycle, tool, effect, and callback owner.
+- Reclassify the external Tura runtime adapter and AGPL component as an optional
+  compatibility and provenance profile rather than a Native deployment
+  dependency.
 
 ## [0.2.0] - 2026-08-31
 
