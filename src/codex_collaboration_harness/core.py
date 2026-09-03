@@ -492,6 +492,8 @@ class StepAttempt:
     effect_state: EffectState
     result_digest: str
     recovery_parent_step_id: str | None = None
+    recovery_admission_id: str | None = None
+    recovery_action_id: str | None = None
     step_id: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -504,8 +506,19 @@ class StepAttempt:
             "result_digest",
         ):
             _require_text(name, getattr(self, name))
-        if self.recovery_parent_step_id is not None:
+        recovery_bindings = (
+            self.recovery_parent_step_id,
+            self.recovery_admission_id,
+            self.recovery_action_id,
+        )
+        if any(item is not None for item in recovery_bindings):
+            if not all(item is not None for item in recovery_bindings):
+                raise ValueError(
+                    "recovery step requires parent step, admission, and action identities"
+                )
             _require_text("recovery_parent_step_id", self.recovery_parent_step_id)
+            _require_text("recovery_admission_id", self.recovery_admission_id)
+            _require_text("recovery_action_id", self.recovery_action_id)
         _require_enum("effect_class", self.effect_class, EffectClass)
         _require_enum("effect_state", self.effect_state, EffectState)
         if (
@@ -522,6 +535,9 @@ class StepAttempt:
             for item in fields(self)
             if item.name != "step_id"
         }
+        if self.recovery_parent_step_id is None:
+            payload.pop("recovery_admission_id")
+            payload.pop("recovery_action_id")
         object.__setattr__(self, "step_id", _stable_id("step_attempt", payload))
 
 
@@ -1132,6 +1148,9 @@ def verify_identity(record: object) -> bool:
             for item in fields(record)
             if item.name != "step_id"
         }
+        if record.recovery_parent_step_id is None:
+            payload.pop("recovery_admission_id")
+            payload.pop("recovery_action_id")
         return record.step_id == _stable_id("step_attempt", payload)
     if isinstance(record, StepEffectReconciliation):
         payload = {
@@ -1319,7 +1338,9 @@ class InMemoryStore:
         self._step_effect_owner: dict[str, str] = {}
         self._step_reconciliations: dict[str, StepEffectReconciliation] = {}
         self._blockers: dict[str, BlockerReport] = {}
+        self._recovery_proposals: dict[str, RecoveryProposal] = {}
         self._recovery_admissions: dict[str, RecoveryAdmission] = {}
+        self._recovery_admission_by_id: dict[str, RecoveryAdmission] = {}
         self._recovery_fingerprints: set[str] = set()
         self._recovery_budget_consumed: dict[str, int] = {}
 
@@ -1628,6 +1649,41 @@ class InMemoryStore:
                     FailureCode.STALE_IDENTITY,
                     "recovery step does not bind a prior step in this packet",
                 )
+            admission = self._recovery_admission_by_id.get(
+                step.recovery_admission_id or ""
+            )
+            proposal = (
+                None
+                if admission is None
+                else self._recovery_proposals.get(admission.proposal_id)
+            )
+            action = (
+                None
+                if proposal is None
+                else next(
+                    (
+                        item
+                        for item in proposal.action_graph
+                        if item.action_id == step.recovery_action_id
+                    ),
+                    None,
+                )
+            )
+            if (
+                admission is None
+                or admission.state is not RecoveryAdmissionState.ADMITTED
+                or admission.packet_id != packet.packet_id
+                or admission.lease_id != lease.lease_id
+                or proposal is None
+                or proposal.blocker_id != admission.blocker_id
+                or action is None
+                or action.operation_digest != step.operation_digest
+                or action.effect_class is not step.effect_class
+            ):
+                raise HarnessViolation(
+                    FailureCode.STALE_IDENTITY,
+                    "recovery step does not bind an admitted action for this packet",
+                )
         existing = self._step_attempts.get(step.step_id)
         if existing is not None:
             if existing == step:
@@ -1855,8 +1911,25 @@ class InMemoryStore:
             reason_codes=tuple(reasons),
             recovery_fingerprint=recovery_fingerprint,
         )
+        self._recovery_proposals[proposal.proposal_id] = proposal
         self._recovery_admissions[proposal.proposal_id] = admission
+        self._recovery_admission_by_id[admission.admission_id] = admission
         return admission
+
+    def _assert_packet_effects_reconciled_before_terminal(
+        self, packet: TaskPacket
+    ) -> None:
+        unsettled = tuple(
+            step_id
+            for step_id in self._steps_by_packet.get(packet.packet_id, ())
+            if self._effective_step_state(self._step_attempts[step_id])
+            is EffectState.UNSETTLED
+        )
+        if unsettled:
+            raise HarnessViolation(
+                FailureCode.UNSETTLED_EFFECT,
+                "packet has unresolved step effects: " + ", ".join(unsettled),
+            )
 
     def _persist_terminal(
         self,
@@ -1878,6 +1951,7 @@ class InMemoryStore:
                 f"packet {packet.packet_id} already has a terminal receipt",
             )
         self._validate_active_claim(packet, lease, current_mission_required=False)
+        self._assert_packet_effects_reconciled_before_terminal(packet)
         receipt_payload = {
             "mission_id": packet.mission_id,
             "mission_revision": packet.mission_revision,
@@ -1998,6 +2072,7 @@ class InMemoryStore:
                 "packet has no unresolved execution failure",
             )
         self._validate_active_claim(packet, lease, current_mission_required=False)
+        self._assert_packet_effects_reconciled_before_terminal(packet)
         if (
             reconciliation.packet_id != packet.packet_id
             or reconciliation.lease_id != lease.lease_id
@@ -2046,6 +2121,7 @@ class InMemoryStore:
         self, packet: TaskPacket, lease: Lease, result: ExecutionResult
     ) -> TerminalReceipt:
         self._validate_active_claim(packet, lease, current_mission_required=False)
+        self._assert_packet_effects_reconciled_before_terminal(packet)
         if packet.packet_id not in self._execution_started:
             raise HarnessViolation(
                 FailureCode.STALE_IDENTITY, "executor attempt was never started"
@@ -2134,6 +2210,7 @@ class InMemoryStore:
                 "packet has no unsettled recorded effect to reconcile",
             )
         self._validate_active_claim(packet, lease, current_mission_required=False)
+        self._assert_packet_effects_reconciled_before_terminal(packet)
         if (
             reconciliation.packet_id != packet.packet_id
             or reconciliation.lease_id != lease.lease_id
@@ -2753,6 +2830,23 @@ class CollaborationHarness:
                 FailureCode.EXECUTOR_ERROR,
                 "executor failed; explicit effect reconciliation is required",
             ) from error
+        if type(result) is not ExecutionResult:
+            self.store.record_execution_failure(
+                packet,
+                lease,
+                FailureCode.EXECUTOR_ERROR,
+                canonical_sha256(
+                    {
+                        "kind": "malformed_executor_result",
+                        "result_type": type(result).__name__,
+                    }
+                ),
+                failure_origin=FailureOrigin.HARNESS,
+            )
+            raise HarnessViolation(
+                FailureCode.EXECUTOR_ERROR,
+                "executor returned a malformed result; reconciliation is required",
+            )
         return self.store.record_execution(packet, lease, result)
 
     def reconcile_effect(
