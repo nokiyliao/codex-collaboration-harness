@@ -14,6 +14,13 @@ Versioning after the first public release.
   returns a destination content block without `structuredContent.status`.
 - Fix Native Tura dispatch reasoning at the supported `max` ceiling and reject
   `ultra` rather than silently relabeling or downgrading a task.
+- Prevent every terminal path from releasing a packet lease while a persisted
+  step effect remains unsettled, without partially recording the final effect.
+- Convert malformed executor returns into harness-origin typed failures that
+  retain the exact lease and explicit reconciliation path.
+- Require recovery steps to bind an admitted proposal action and match its
+  operation digest and effect class.
+- Preserve existing content-addressed identities for non-recovery step records.
 
 ### Added
 

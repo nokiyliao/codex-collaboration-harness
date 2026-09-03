@@ -74,7 +74,8 @@ runtime.
 
 ## Invariant Matrix
 
-The current v0.3.1 candidate suite contains 82 tests. Its direct evidence is:
+The suite count is discovered from the current source rather than frozen in
+documentation. Its direct evidence is:
 
 | Test area | Direct observation |
 |---|---|
@@ -83,6 +84,8 @@ The current v0.3.1 candidate suite contains 82 tests. Its direct evidence is:
 | Overlapping ownership | A second mission cannot claim an overlapping active scope |
 | Pre-execution rejection | A typed blocked terminal receipt is written and the exact lease is released without an executor call |
 | Unsettled reconciliation | One attempt/effect is retained, executor retry is blocked, and settlement terminalizes the same identity with an executor call count of one |
+| Step-effect terminal guard | An unresolved step effect cannot create a receipt or release its lease; terminalization succeeds only after exact step reconciliation |
+| Executor result boundary | A non-`ExecutionResult` return becomes a harness-origin typed failure with its lease retained for explicit reconciliation |
 | Callback target | A wrong proof destination creates no ACK or mission verification; the terminal task lease remains released |
 | Callback recovery | Delivery start becomes `DELIVERY_UNSETTLED` on uncertain outcome; retry requires an exact authoritative absence proof, while committed delivery requires its exact convergence proof |
 | Identical replay | Replay after acknowledgement returns empty effect, continuation, and acknowledgement tuples |
@@ -92,6 +95,7 @@ The current v0.3.1 candidate suite contains 82 tests. Its direct evidence is:
 | Parent readback authority | A true worker claim cannot complete a false parent predicate; a true parent readback can complete it despite a false worker claim |
 | Readback identity | A complete ordered snapshot is required; stale parent sequences and conflicting content at the same sequence are rejected |
 | Recovery authority | Only diagnostic/plan blockers with reconciled effects, subset scope, unchanged parent fields, verification plan, safe effect class, and available parent budget are admitted |
+| Recovery execution binding | A recovery step references the exact admitted proposal action and matches its operation digest and effect class |
 | Recovery replay | Repeating the same blocker/state/action fingerprint is a no-op rather than a second effect |
 | Packet identity | A tampered content-addressed packet cannot acquire a lease |
 | Failure authority | Executor and harness failure origins remain distinct through terminal receipt reconciliation |

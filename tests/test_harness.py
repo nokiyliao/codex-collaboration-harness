@@ -306,6 +306,28 @@ class HarnessTestCase(unittest.TestCase):
 
 
 class RuntimeTypeValidationTests(HarnessTestCase):
+    def test_malformed_executor_result_records_typed_failure(self) -> None:
+        class NoneExecutor:
+            executor_id = EXECUTOR_ID
+
+            def execute(self, packet, lease):
+                return None
+
+        harness = CollaborationHarness()
+        packet = harness.plan(make_mission())
+        lease = harness.claim(packet)
+
+        self.assert_code(
+            FailureCode.EXECUTOR_ERROR,
+            lambda: harness.execute(packet, lease, NoneExecutor()),
+        )
+
+        failure = harness.store.failure_for_packet(packet.packet_id)
+        self.assertIsNotNone(failure)
+        self.assertIs(failure.failure_origin, FailureOrigin.HARNESS)
+        self.assertEqual(harness.store.snapshot().active_lease_count, 1)
+        self.assertEqual(harness.store.snapshot().terminal_receipt_count, 0)
+
     def test_string_false_readback_is_rejected(self) -> None:
         with self.assertRaises(TypeError):
             PredicateReadback(
@@ -1378,6 +1400,63 @@ class RecoveryEnvelopeTests(HarnessTestCase):
         self.assertEqual(snapshot.active_lease_count, 1)
         self.assertEqual(snapshot.terminal_receipt_count, 0)
 
+    def test_recovery_step_requires_exact_admitted_action(self) -> None:
+        harness, packet, lease = self.active_attempt()
+        parent = harness.record_step_attempt(
+            packet, lease, self.make_step(packet, lease)
+        )
+        blocker = harness.record_blocker(
+            packet, lease, self.make_blocker(packet, lease, parent)
+        )
+        action = RecoveryAction(
+            action_kind="repair_local_input",
+            scope=packet.scope,
+            effect_class=EffectClass.REVERSIBLE_LOCAL,
+            operation_digest=canonical_sha256({"repair": "admitted"}),
+        )
+        proposal = self.make_proposal(packet, lease, blocker, action=action)
+        admission = harness.admit_recovery(packet, lease, blocker, proposal)
+        recovery = StepAttempt(
+            packet_id=packet.packet_id,
+            lease_id=lease.lease_id,
+            operation_digest=action.operation_digest,
+            tool_id="tool.local",
+            precondition_digest=canonical_sha256({"precondition": "admitted"}),
+            effect_class=action.effect_class,
+            effect_id="effect.recovery.admitted",
+            effect_state=EffectState.SETTLED,
+            result_digest=canonical_sha256({"result": "repaired"}),
+            recovery_parent_step_id=parent.step_id,
+            recovery_admission_id=admission.admission_id,
+            recovery_action_id=action.action_id,
+        )
+
+        self.assertEqual(
+            harness.record_step_attempt(packet, lease, recovery), recovery
+        )
+        unauthorized = replace(
+            recovery,
+            recovery_action_id="recovery_action.not-admitted",
+        )
+        self.assert_code(
+            FailureCode.STALE_IDENTITY,
+            lambda: harness.record_step_attempt(packet, lease, unauthorized),
+        )
+
+    def test_recovery_step_rejects_unadmitted_action(self) -> None:
+        harness, packet, lease = self.active_attempt()
+        parent = harness.record_step_attempt(
+            packet, lease, self.make_step(packet, lease)
+        )
+
+        with self.assertRaises(ValueError):
+            replace(
+                parent,
+                recovery_parent_step_id=parent.step_id,
+                recovery_admission_id=None,
+                recovery_action_id=None,
+            )
+
     def test_scope_authority_and_protected_effect_expansion_escalate(self) -> None:
         harness, packet, lease = self.active_attempt()
         step = harness.record_step_attempt(packet, lease, self.make_step(packet, lease))
@@ -1564,6 +1643,55 @@ class RecoveryEnvelopeTests(HarnessTestCase):
             self.make_proposal(packet, lease, reconciled_blocker),
         )
         self.assertIs(admitted.state, RecoveryAdmissionState.ADMITTED)
+
+    def test_unsettled_step_blocks_terminalization_until_reconciled(self) -> None:
+        harness, packet, lease = self.active_attempt()
+        step = harness.record_step_attempt(
+            packet,
+            lease,
+            self.make_step(
+                packet,
+                lease,
+                effect_state=EffectState.UNSETTLED,
+                effect_id="effect.step.before-terminal",
+                effect_class=EffectClass.REVERSIBLE_LOCAL,
+            ),
+        )
+        result = ExecutionResult(
+            executor_id=packet.executor_id,
+            packet_id=packet.packet_id,
+            lease_id=lease.lease_id,
+            effect_id="effect.final.after-step",
+            effect_state=EffectState.SETTLED,
+            output_digest=canonical_sha256({"terminal": "attempted"}),
+            predicate_satisfied=True,
+        )
+
+        self.assert_code(
+            FailureCode.UNSETTLED_EFFECT,
+            lambda: harness.store.record_execution(packet, lease, result),
+        )
+        snapshot = harness.store.snapshot()
+        self.assertEqual(snapshot.execution_attempt_count, 1)
+        self.assertEqual(snapshot.effect_count, 0)
+        self.assertEqual(snapshot.active_lease_count, 1)
+        self.assertEqual(snapshot.terminal_receipt_count, 0)
+
+        harness.reconcile_step_effect(
+            packet,
+            lease,
+            StepEffectReconciliation(
+                packet_id=packet.packet_id,
+                lease_id=lease.lease_id,
+                step_id=step.step_id,
+                effect_id=step.effect_id,
+                effect_state=EffectState.SETTLED,
+                proof_digest=canonical_sha256({"effect": "settled"}),
+            ),
+        )
+        receipt = harness.store.record_execution(packet, lease, result)
+        self.assertIs(receipt.status, TerminalStatus.SUCCEEDED)
+        self.assertEqual(harness.store.snapshot().active_lease_count, 0)
 
     def test_duplicate_blocker_state_action_fingerprint_is_empty_replay(self) -> None:
         harness, packet, lease = self.active_attempt()

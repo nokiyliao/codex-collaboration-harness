@@ -151,8 +151,11 @@ value remains advisory and cannot complete the mission.
 
 `StepAttempt` records each operation, precondition, tool, result, effect class,
 effect identity, and effect state. `BlockerReport` classifies an obstruction
-without terminalizing the task. A model may produce a `RecoveryProposal`, but
-only `RecoveryAdmission(ADMITTED)` authorizes a local method change. Admission
+without terminalizing the task. A recovery step also binds its parent step, the
+exact `RecoveryAdmission(ADMITTED)`, and one action from that admission's
+proposal; its operation digest and effect class must match the admitted action.
+A model may produce a `RecoveryProposal`, but only an admitted proposal
+authorizes a local method change. Admission
 requires a diagnostic or plan blocker, exact packet/lease binding, unchanged
 predicate/destination/authority, subset scope, reconciled prior effects, a
 verification plan, no new protected effect, and available parent packet budget.
@@ -176,6 +179,10 @@ Any pre-execution rejection terminalizes as a typed blocker without inventing
 an execution result. A begun attempt that fails or returns an invalid identity
 remains unresolved and keeps its lease until explicit failure reconciliation
 proves `NONE` or `SETTLED`; it then terminalizes without a second execution.
+An executor return that is not an exact `ExecutionResult` becomes a
+harness-origin execution failure rather than leaking a runtime exception. No
+terminal path may release a packet lease while a persisted step effect remains
+`UNSETTLED`.
 
 ### 6.2 Continuation
 
