@@ -58,7 +58,7 @@ NATIVE_TURA_ROLE_SHA256 = (
     "2383fb6d65b3d9c71f6e5b972ae6718e723a3f684c9b55c9139a7c9fccba8983"
 )
 NATIVE_TURA_SKILL_SHA256 = {
-    "SKILL.md": "98fdcd044b74c5ac1af55d68b1f829f64a59960dfb66748e0f98d2bd30b829c7",
+    "SKILL.md": "f580f97200f60cf0d87b8a38e843ec3d31aae373d32d003c26d50cbab27e64e1",
     "agents/openai.yaml": "afd2cefb13e0c8c54ba7f0ed2c54c6dcbfac9fba514415d8e6a518bf396bc0c8",
     "references/native-topology.md": "df83e8637a7434e50fd1eee86c8c80626cd2d79ab002667e8301571ae93855e5",
 }

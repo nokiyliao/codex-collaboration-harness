@@ -301,6 +301,8 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
             self.assertNotIn("task_context_capsule=", dispatch)
             self.assertNotIn("jspace_contract=", dispatch)
             self.assertIn("Do not run the capsule loader", dispatch)
+            self.assertIn("CallToolResult.isError is not true", dispatch)
+            self.assertIn("Do not require structuredContent", dispatch)
 
     def test_cli_renders_ready_to_send_context_dispatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

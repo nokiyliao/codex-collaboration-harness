@@ -118,5 +118,12 @@ retry. Finish locally with `CALLBACK_DELIVERY_UNSETTLED`, the payload digest,
 and the exact uncertain attempt so Commander can reconcile it from Native task
 history.
 
+Treat a `send_message_to_thread` invocation that returns normally with
+`CallToolResult.isError` absent or `false` as successful delivery. The Native
+tool may return only a content block containing the target `threadId`; do not
+require `structuredContent`, `status`, or an acknowledgement field. A thrown
+tool/transport error or `isError: true` remains delivery-uncertain and must not
+be retried blindly.
+
 The child task's final response is fallback evidence only. Mission convergence
 belongs to the parent Commander after callback intake.

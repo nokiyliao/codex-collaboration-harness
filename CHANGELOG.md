@@ -9,6 +9,9 @@ Versioning after the first public release.
 
 ### Fixed
 
+- Define Native callback success from the actual `CallToolResult` contract,
+  avoiding false `CALLBACK_DELIVERY_UNSETTLED` results when the official tool
+  returns a destination content block without `structuredContent.status`.
 - Fix Native Tura dispatch reasoning at the supported `max` ceiling and reject
   `ultra` rather than silently relabeling or downgrading a task.
 

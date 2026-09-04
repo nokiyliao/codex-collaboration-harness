@@ -221,6 +221,11 @@ class NativeTuraTaskCapsule:
                 "Use task_projection first. Read Native evidence only when a required "
                 "result field is absent from that projection."
             ),
+            (
+                "A send_message_to_thread call is delivered when it returns normally "
+                "and CallToolResult.isError is not true. Do not require "
+                "structuredContent or a status field."
+            ),
             "",
             self._render_task(include_context_sources=False).rstrip("\n"),
         ]

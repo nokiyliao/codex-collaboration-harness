@@ -142,6 +142,12 @@ official `send_message_to_thread` call to the bound parent. No external Tura
 request, Session DB, Gateway, Router, or terminal-envelope transport
 participates in this profile.
 
+Native delivery confirmation is schema-light: a normally returned
+`CallToolResult` whose `isError` is absent or `false` confirms delivery. The
+tool can return only the destination `threadId` in a content block, so workers
+must not require `structuredContent.status` or manufacture a second callback
+after a false-negative local check.
+
 Deployment acceptance should prove the Skill is readable from the installed
 package, the installed target digests match the reviewed resources, a fresh
 first-class task can explicitly load `$tura-kernel`, and its callback works
