@@ -438,6 +438,19 @@ class NativeTuraTaskCapsule:
             ),
         ]
         if _uses_read_only_fast_path(self.task_packet):
+            terminal_template = NativeTuraTerminal(
+                callback_id=self.callback_id,
+                parent_thread_id=self.parent_thread_id,
+                task_thread_id="<CODEX_THREAD_ID>",
+                status="PREDICATE_ADVANCED",
+                mission=self.mission,
+                predicate=self.task_packet.predicate_key,
+                predicate_delta="<replace with actual predicate delta>",
+                evidence=(),
+                first_typed_blocker=None,
+                authority_effect="none",
+                protected_effect_count=0,
+            ).render().rstrip("\n")
             lines.extend(
                 (
                     "",
@@ -457,6 +470,15 @@ class NativeTuraTaskCapsule:
                         "After the read batch, send the canonical terminal callback "
                         "immediately without intermediate progress narration."
                     ),
+                    "",
+                    "NATIVE_TURA_CANONICAL_TERMINAL_TEMPLATE_V1",
+                    (
+                        "Use the exact two-line callback below. Replace CODEX_THREAD_ID, "
+                        "predicate_delta, evidence, and status only when the observed "
+                        "result requires it; keep the marker, key set, bound identities, "
+                        "mission, and predicate unchanged."
+                    ),
+                    terminal_template,
                 )
             )
         lines.extend(

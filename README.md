@@ -133,7 +133,9 @@ Capsules whose scopes are all explicitly prefixed with `read:` receive the
 `NATIVE_TURA_READ_ONLY_FAST_PATH_V1` execution marker. Those tasks batch their
 independent reads and proceed directly to the single terminal callback instead
 of spending extra provider turns rediscovering or self-validating the callback
-contract.
+contract. The compiler embeds the exact two-line canonical terminal template so
+the worker cannot drift to a historical marker while source/test discovery is
+disabled.
 
 Start with the public objects exported by `codex_collaboration_harness`; see
 [`docs/verification.md`](docs/verification.md) for the exact verification

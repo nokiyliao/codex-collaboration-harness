@@ -7,6 +7,14 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-09-05
+
+### Fixed
+
+- Embed the exact canonical two-line terminal template in every read-only fast
+  path dispatch. The worker no longer needs source/test discovery and cannot
+  silently substitute a historical callback marker that parent intake rejects.
+
 ## [0.3.3] - 2026-09-05
 
 ### Changed

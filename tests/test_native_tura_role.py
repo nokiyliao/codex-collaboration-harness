@@ -342,6 +342,22 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
             self.assertIn("CODEX_THREAD_ID", dispatch)
             self.assertIn("Do not perform child-side terminal", dispatch)
             self.assertIn("without intermediate progress narration", dispatch)
+            self.assertIn("NATIVE_TURA_CANONICAL_TERMINAL_TEMPLATE_V1", dispatch)
+            self.assertEqual(dispatch.count(NATIVE_TURA_TERMINAL_MARKER), 1)
+            marker_index = dispatch.index(f"{NATIVE_TURA_TERMINAL_MARKER}\n")
+            template_text = dispatch[marker_index:].split("\n\nMISSION\n", 1)[0]
+            template = parse_native_tura_terminal_callback(
+                template_text,
+                expected_callback_id=load_native_tura_task_capsule(
+                    TASK_NAME, root=root
+                ).callback_id,
+                expected_parent_thread_id=packet.destination.thread_id,
+                expected_task_thread_id="<CODEX_THREAD_ID>",
+            )
+            self.assertEqual(template.status, "PREDICATE_ADVANCED")
+            self.assertEqual(template.predicate, packet.predicate_key)
+            self.assertEqual(template.authority_effect, "none")
+            self.assertEqual(template.protected_effect_count, 0)
 
     def test_cli_renders_ready_to_send_context_dispatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

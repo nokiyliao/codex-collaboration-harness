@@ -144,7 +144,10 @@ sends the canonical terminal without inspecting harness source/tests or doing a
 child-side render/parse loop. Callback identity and no-retry semantics remain
 unchanged; the parent still performs exact terminal intake. This removes
 redundant provider turns from small verification tasks without weakening the
-general effecting-task contract.
+general effecting-task contract. The compiler also embeds the exact two-line
+`NATIVE_TURA_CANONICAL_TERMINAL_TEMPLATE_V1`, including the bound callback,
+parent, mission, predicate, and canonical marker; the worker fills only observed
+terminal fields.
 
 For a context-bound task, the parent should render the already-published,
 verified capsule into the initial Native task with:

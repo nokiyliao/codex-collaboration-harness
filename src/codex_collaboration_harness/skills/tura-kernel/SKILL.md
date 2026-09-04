@@ -77,9 +77,12 @@ working state, but do not spend provider turns narrating them between reads.
   already embedded in the dispatch.
 - Do not render and parse the terminal again inside the child merely to prove
   its own output. The parent performs exact callback intake.
-- After the read batch, construct the supplied canonical terminal shape and
-  call `send_message_to_thread` immediately. Do not add an intermediate review,
-  receipt publication, progress report, or callback acknowledgement phase.
+- After the read batch, use the dispatch's exact
+  `NATIVE_TURA_CANONICAL_TERMINAL_TEMPLATE_V1` two-line callback and call
+  `send_message_to_thread` immediately. Keep its marker, key set, bound
+  identities, mission, and predicate unchanged. Do not add an intermediate
+  review, receipt publication, progress report, or callback acknowledgement
+  phase.
 
 This fast path removes redundant model boundaries; it does not relax scope,
 identity, effect, callback, or no-retry rules.
