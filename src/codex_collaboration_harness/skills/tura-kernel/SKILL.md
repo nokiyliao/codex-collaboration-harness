@@ -71,6 +71,12 @@ working state, but do not spend provider turns narrating them between reads.
 
 - Do not run a command to re-read this Skill after it has been activated.
 - Execute all independent evidence checks in one Native batched-read stage.
+- Native command shells are zsh. Never assign its special parameters `path`,
+  `status`, `commands`, or `pipestatus`; use descriptive names such as
+  `candidate_path` and `worktree_state` instead.
+- For hidden installed roots, use exact known paths or
+  `rg --files --hidden --no-ignore`; a default hidden-file search is not absence
+  evidence.
 - Resolve the exact current task identity once from `CODEX_THREAD_ID`. If it is
   absent, return `TURA_NATIVE_TASK_ID_UNAVAILABLE`; do not search or guess.
 - Do not inspect harness source or tests to rediscover the terminal format

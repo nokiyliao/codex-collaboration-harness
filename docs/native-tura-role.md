@@ -147,7 +147,9 @@ redundant provider turns from small verification tasks without weakening the
 general effecting-task contract. The compiler also embeds the exact two-line
 `NATIVE_TURA_CANONICAL_TERMINAL_TEMPLATE_V1`, including the bound callback,
 parent, mission, predicate, and canonical marker; the worker fills only observed
-terminal fields.
+terminal fields. Its single read batch uses zsh-safe variable names and exact or
+hidden-aware installed paths so a successful read is not converted into a
+synthetic blocker by shell parameter collisions.
 
 For a context-bound task, the parent should render the already-published,
 verified capsule into the initial Native task with:

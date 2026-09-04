@@ -458,6 +458,16 @@ class NativeTuraTaskCapsule:
                     "All admitted execution scopes are explicitly read-only.",
                     "Use one batched Native read stage for all independent checks.",
                     (
+                        "Native command shells are zsh: never assign its special "
+                        "parameters path, status, commands, or pipestatus. Use "
+                        "descriptive names such as candidate_path and worktree_state."
+                    ),
+                    (
+                        "For hidden installed roots, use exact known paths or "
+                        "rg --files --hidden --no-ignore; do not infer absence from "
+                        "a default hidden-file search."
+                    ),
+                    (
                         "Do not inspect harness source or tests to rediscover callback "
                         "formatting already present in this dispatch."
                     ),

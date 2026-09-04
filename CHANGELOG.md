@@ -7,6 +7,15 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-09-05
+
+### Fixed
+
+- Prevent read-only fast-path probes from assigning zsh special parameters such
+  as `path` and `status`, and require hidden-root-aware file enumeration. This
+  removes two observed pre-terminal command failures without adding a helper
+  process or alternate execution path.
+
 ## [0.3.4] - 2026-09-05
 
 ### Fixed

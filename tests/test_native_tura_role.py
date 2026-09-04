@@ -340,6 +340,8 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
             self.assertIn(NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER, dispatch)
             self.assertIn("one batched Native read stage", dispatch)
             self.assertIn("CODEX_THREAD_ID", dispatch)
+            self.assertIn("never assign its special parameters path, status", dispatch)
+            self.assertIn("rg --files --hidden --no-ignore", dispatch)
             self.assertIn("Do not perform child-side terminal", dispatch)
             self.assertIn("without intermediate progress narration", dispatch)
             self.assertIn("NATIVE_TURA_CANONICAL_TERMINAL_TEMPLATE_V1", dispatch)

@@ -135,7 +135,8 @@ independent reads and proceed directly to the single terminal callback instead
 of spending extra provider turns rediscovering or self-validating the callback
 contract. The compiler embeds the exact two-line canonical terminal template so
 the worker cannot drift to a historical marker while source/test discovery is
-disabled.
+disabled. The fast-path command contract also avoids zsh special-parameter
+collisions and requires hidden-root-aware file enumeration.
 
 Start with the public objects exported by `codex_collaboration_harness`; see
 [`docs/verification.md`](docs/verification.md) for the exact verification
