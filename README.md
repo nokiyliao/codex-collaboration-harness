@@ -128,6 +128,13 @@ callback identity, and parent thread. The Commander still performs the official
 task creation. A reviewed Skill update can be adopted atomically with
 `tura-taskpacket install-skill --replace`; without `--replace`, any target drift
 continues to fail closed.
+
+Capsules whose scopes are all explicitly prefixed with `read:` receive the
+`NATIVE_TURA_READ_ONLY_FAST_PATH_V1` execution marker. Those tasks batch their
+independent reads and proceed directly to the single terminal callback instead
+of spending extra provider turns rediscovering or self-validating the callback
+contract.
+
 Start with the public objects exported by `codex_collaboration_harness`; see
 [`docs/verification.md`](docs/verification.md) for the exact verification
 contract and [`docs/architecture.md`](docs/architecture.md) for the lifecycle.

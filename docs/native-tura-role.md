@@ -137,6 +137,15 @@ and a `create_thread` argument object, but it does not call `create_thread`.
 Changing the execution profile changes the callback identity, preventing a task
 started with different model or target settings from reusing the old callback.
 
+When every declared scope starts with `read:`, the compiler also emits
+`NATIVE_TURA_READ_ONLY_FAST_PATH_V1`. The worker then performs one batched
+Native read stage, resolves its task ID directly from `CODEX_THREAD_ID`, and
+sends the canonical terminal without inspecting harness source/tests or doing a
+child-side render/parse loop. Callback identity and no-retry semantics remain
+unchanged; the parent still performs exact terminal intake. This removes
+redundant provider turns from small verification tasks without weakening the
+general effecting-task contract.
+
 For a context-bound task, the parent should render the already-published,
 verified capsule into the initial Native task with:
 

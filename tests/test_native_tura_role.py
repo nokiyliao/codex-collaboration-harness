@@ -21,6 +21,7 @@ from codex_collaboration_harness import (
 from codex_collaboration_harness.native_tura import (
     LEGACY_NATIVE_TURA_CAPSULE_VERSION,
     NATIVE_TURA_CAPSULE_VERSION,
+    NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER,
     NATIVE_TURA_TERMINAL_MARKER,
     PROFILED_NATIVE_TURA_CAPSULE_VERSION,
     NativeTuraExecutionProfile,
@@ -310,6 +311,37 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
             self.assertIn("Do not run the capsule loader", dispatch)
             self.assertIn("CallToolResult.isError is not true", dispatch)
             self.assertIn("Do not require structuredContent", dispatch)
+            self.assertNotIn(NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER, dispatch)
+
+    def test_explicit_read_scopes_enable_single_batch_fast_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            packet = replace(
+                make_packet(),
+                scope=("read:installed-package", "read:source-package"),
+                scope_versions=(
+                    ("read:installed-package", 1),
+                    ("read:source-package", 1),
+                ),
+                recovery_budget=0,
+            )
+            publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Verify one read-only installed identity.",
+                shortest_valid_route="Read both admitted package roots once.",
+                task_packet=packet,
+                root=root,
+            )
+
+            dispatch = load_native_tura_task_capsule(
+                TASK_NAME, root=root
+            ).render_dispatch()
+
+            self.assertIn(NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER, dispatch)
+            self.assertIn("one batched Native read stage", dispatch)
+            self.assertIn("CODEX_THREAD_ID", dispatch)
+            self.assertIn("Do not perform child-side terminal", dispatch)
+            self.assertIn("without intermediate progress narration", dispatch)
 
     def test_cli_renders_ready_to_send_context_dispatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

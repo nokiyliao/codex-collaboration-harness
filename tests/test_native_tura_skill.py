@@ -47,6 +47,10 @@ class NativeTuraSkillTests(unittest.TestCase):
         self.assertIn("[TURA_NATIVE_TERMINAL_V1]", skill)
         self.assertIn("send_message_to_thread", skill)
         self.assertIn("thinking=\"max\"", skill)
+        self.assertIn("NATIVE_TURA_READ_ONLY_FAST_PATH_V1", skill)
+        self.assertIn("one Native batched-read stage", skill)
+        self.assertIn("do not spend provider turns narrating", skill)
+        self.assertIn("The parent performs exact callback intake", skill)
 
     def test_install_is_atomic_and_identical_replay_is_a_noop(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -63,6 +63,27 @@ capsule, load it exactly once with
 parent and callback identities match the initial message. This loader is
 optional immutable-input validation, not a session store or runtime.
 
+### Read-only fast path
+
+When the dispatch contains `NATIVE_TURA_READ_ONLY_FAST_PATH_V1`, every admitted
+execution scope is explicitly read-only. Keep the five decision fields in
+working state, but do not spend provider turns narrating them between reads.
+
+- Do not run a command to re-read this Skill after it has been activated.
+- Execute all independent evidence checks in one Native batched-read stage.
+- Resolve the exact current task identity once from `CODEX_THREAD_ID`. If it is
+  absent, return `TURA_NATIVE_TASK_ID_UNAVAILABLE`; do not search or guess.
+- Do not inspect harness source or tests to rediscover the terminal format
+  already embedded in the dispatch.
+- Do not render and parse the terminal again inside the child merely to prove
+  its own output. The parent performs exact callback intake.
+- After the read batch, construct the supplied canonical terminal shape and
+  call `send_message_to_thread` immediately. Do not add an intermediate review,
+  receipt publication, progress report, or callback acknowledgement phase.
+
+This fast path removes redundant model boundaries; it does not relax scope,
+identity, effect, callback, or no-retry rules.
+
 ## Execute
 
 Before each non-trivial action keep the five required decision fields current.

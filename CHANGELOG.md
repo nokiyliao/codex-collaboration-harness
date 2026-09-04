@@ -7,6 +7,18 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-09-05
+
+### Changed
+
+- Emit `NATIVE_TURA_READ_ONLY_FAST_PATH_V1` when every admitted execution scope
+  is explicitly `read:`-only. The worker uses one batched read stage, resolves
+  its task identity from `CODEX_THREAD_ID`, and proceeds directly to the single
+  canonical callback.
+- Remove redundant child-side package/test discovery, terminal render/parse
+  self-verification, and progress narration from the read-only path. Parent
+  callback parsing, exact task bindings, and no-blind-retry remain unchanged.
+
 ## [0.3.2] - 2026-09-05
 
 ### Fixed

@@ -37,6 +37,7 @@ NATIVE_TURA_EXECUTION_PROFILE_VERSION = "native-tura-execution-profile/v1"
 NATIVE_TURA_DISPATCH_PLAN_VERSION = "native-tura-dispatch-plan/v1"
 NATIVE_TURA_TERMINAL_SCHEMA_VERSION = "tura_native_terminal_v1"
 NATIVE_TURA_TERMINAL_MARKER = "[TURA_NATIVE_TERMINAL_V1]"
+NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER = "NATIVE_TURA_READ_ONLY_FAST_PATH_V1"
 MAX_CAPSULE_BYTES = 512 * 1024
 NATIVE_TURA_SKILL_NAME = "tura-kernel"
 NATIVE_TURA_REASONING_EFFORT = "max"
@@ -184,6 +185,10 @@ _NATIVE_TERMINAL_STATUSES = {
     "BLOCKED",
 }
 _NATIVE_REASONING_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
+
+
+def _uses_read_only_fast_path(packet: TaskPacket) -> bool:
+    return bool(packet.scope) and all(scope.startswith("read:") for scope in packet.scope)
 
 
 class NativeTuraPacketError(ValueError):
@@ -431,9 +436,35 @@ class NativeTuraTaskCapsule:
                 "and CallToolResult.isError is not true. Do not require "
                 "structuredContent or a status field."
             ),
-            "",
-            self._render_task(include_context_sources=False).rstrip("\n"),
         ]
+        if _uses_read_only_fast_path(self.task_packet):
+            lines.extend(
+                (
+                    "",
+                    NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER,
+                    "All admitted execution scopes are explicitly read-only.",
+                    "Use one batched Native read stage for all independent checks.",
+                    (
+                        "Do not inspect harness source or tests to rediscover callback "
+                        "formatting already present in this dispatch."
+                    ),
+                    "Do not perform child-side terminal render-then-parse self-verification.",
+                    (
+                        "Resolve task_thread_id once from CODEX_THREAD_ID; if it is "
+                        "missing, return TURA_NATIVE_TASK_ID_UNAVAILABLE."
+                    ),
+                    (
+                        "After the read batch, send the canonical terminal callback "
+                        "immediately without intermediate progress narration."
+                    ),
+                )
+            )
+        lines.extend(
+            (
+                "",
+                self._render_task(include_context_sources=False).rstrip("\n"),
+            )
+        )
         return "\n".join(lines) + "\n"
 
     def _render_task(self, *, include_context_sources: bool) -> str:
