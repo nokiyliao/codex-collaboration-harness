@@ -44,10 +44,19 @@ follow-up dispatch. The parent Commander creates a fresh Native task with a new
 callback identity instead. This keeps Tura task identity independent from a
 completed provider response chain.
 
-When the dispatch explicitly supplies a Native Tura capsule task name, load it
-exactly once with `tura-taskpacket load --task-name <name> --format task` and
-verify that its parent and callback identities match the initial message. This
-loader is optional immutable-input validation, not a session store or runtime.
+When the initial dispatch contains `NATIVE_TURA_INLINE_CAPSULE_V1`,
+`NATIVE_TASK_BINDING`, and `TASK_LOCAL_EVIDENCE`, treat that inline capsule as
+already loaded and verified by the Commander. Do not call `tura-taskpacket`,
+re-read the bound context files, or recompute their hashes merely to validate
+the dispatch. Start from `task_projection`; use Native Codex reads only when a
+required result field is absent from that projection. Continue only when the
+inline parent and callback identities match the initial dispatch.
+
+When the dispatch supplies only a Native Tura capsule task name and no inline
+capsule, load it exactly once with
+`tura-taskpacket load --task-name <name> --format task` and verify that its
+parent and callback identities match the initial message. This loader is
+optional immutable-input validation, not a session store or runtime.
 
 ## Execute
 

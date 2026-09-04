@@ -114,8 +114,9 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 
 There is no runtime daemon or lifecycle service in the reference package. The
 only CLI, `tura-taskpacket`, installs or verifies the packaged Skill and renders
-an immutable Native Tura task capsule; it does not create sessions, dispatch
-workers, or write callbacks.
+an immutable Native Tura task capsule. Its `--format dispatch` view is a compact
+ready-to-send Native task with task-local evidence already projected; it does
+not create sessions, dispatch workers, or write callbacks.
 Start with the public objects exported by `codex_collaboration_harness`; see
 [`docs/verification.md`](docs/verification.md) for the exact verification
 contract and [`docs/architecture.md`](docs/architecture.md) for the lifecycle.

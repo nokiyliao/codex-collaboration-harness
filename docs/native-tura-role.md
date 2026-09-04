@@ -111,13 +111,28 @@ EXPECTED_PREDICATE_DELTA
 ABANDON_IF
 ```
 
-If the task uses an immutable capsule binding, the Skill runs exactly one:
+For a context-bound task, the parent should render the already-published,
+verified capsule into the initial Native task with:
+
+```bash
+tura-taskpacket load --task-name /root/example_task --format dispatch
+```
+
+The resulting prompt starts with `$tura-kernel`, carries the exact task and
+callback identities, and includes only the task projection plus the
+execution-relevant J-Space policy. The complete context and J-Space source bytes
+remain in the immutable capsule instead of being repeated in every provider
+tool turn. The Skill consumes this inline dispatch without an extra loader,
+context read, or digest pass.
+
+Only when Native Codex cannot expose that rendered initial message and supplies
+the capsule task name alone does the Skill run exactly one fallback load:
 
 ```bash
 tura-taskpacket load --task-name /root/example_task --format task
 ```
 
-The task name is only a lookup key. On each unreadable Native turn, the child
+The task name is only a lookup key. On an unreadable Native turn, the child
 loads the unique highest immutable revision and must use the verified capsule
 contents, including the exact parent thread and callback identity, and must not
 infer instructions from the name itself.

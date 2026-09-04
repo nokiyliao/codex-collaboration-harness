@@ -14,6 +14,9 @@ Versioning after the first public release.
 
 ### Added
 
+- Add a compact `tura-taskpacket load --format dispatch` view that invokes the
+  Native Tura Skill with a pre-verified task projection and J-Space policy,
+  avoiding an extra bootstrap tool turn and repeated evidence hashing.
 - Package the source-authoritative `$tura-kernel` Skill, metadata, and Native
   topology, plus an atomic `tura-taskpacket install-skill` parity installer.
 - Verify exact Skill member identities in source tests, public readiness,

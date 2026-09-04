@@ -20,7 +20,7 @@ from codex_collaboration_harness.native_tura import (
 
 
 EXPECTED_DIGESTS = {
-    "SKILL.md": "d0cd6914ad6c76a271d06db6a6c1578149f3251bc4df25ee1aeb76a6a383702d",
+    "SKILL.md": "98fdcd044b74c5ac1af55d68b1f829f64a59960dfb66748e0f98d2bd30b829c7",
     "agents/openai.yaml": "afd2cefb13e0c8c54ba7f0ed2c54c6dcbfac9fba514415d8e6a518bf396bc0c8",
     "references/native-topology.md": "df83e8637a7434e50fd1eee86c8c80626cd2d79ab002667e8301571ae93855e5",
 }

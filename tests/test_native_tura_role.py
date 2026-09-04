@@ -275,6 +275,65 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
             self.assertIn('"schema_version":"jspace_contract_v1"', rendered)
             self.assertNotEqual(packet.packet_id, make_packet().packet_id)
 
+    def test_context_dispatch_is_compact_and_requires_no_bootstrap_tool_call(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binding = _write_context_pair(root / "evidence")
+            publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Run one context-bound Native Tura task.",
+                shortest_valid_route="Use the projected task evidence first.",
+                task_packet=make_packet(task_context_binding=binding),
+                root=root / "packets",
+            )
+            loaded = load_native_tura_task_capsule(TASK_NAME, root=root / "packets")
+
+            dispatch = loaded.render_dispatch()
+
+            self.assertTrue(dispatch.startswith("$tura-kernel\n\n"))
+            self.assertEqual(dispatch.count("$tura-kernel"), 1)
+            self.assertIn("NATIVE_TURA_INLINE_CAPSULE_V1", dispatch)
+            self.assertIn(f"capsule_sha256={loaded.capsule_sha256}", dispatch)
+            self.assertIn("task_projection=", dispatch)
+            self.assertIn("jspace_policy=", dispatch)
+            self.assertNotIn("task_context_capsule=", dispatch)
+            self.assertNotIn("jspace_contract=", dispatch)
+            self.assertIn("Do not run the capsule loader", dispatch)
+
+    def test_cli_renders_ready_to_send_context_dispatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binding = _write_context_pair(root / "evidence")
+            publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Run one context-bound Native Tura task.",
+                shortest_valid_route="Use the projected task evidence first.",
+                task_packet=make_packet(task_context_binding=binding),
+                root=root / "packets",
+            )
+            stdout = StringIO()
+            stderr = StringIO()
+
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = main(
+                    [
+                        "--root",
+                        str(root / "packets"),
+                        "load",
+                        "--task-name",
+                        TASK_NAME,
+                        "--format",
+                        "dispatch",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(stderr.getvalue(), "")
+            self.assertTrue(stdout.getvalue().startswith("$tura-kernel\n\n"))
+            self.assertIn("NATIVE_TURA_INLINE_CAPSULE_V1", stdout.getvalue())
+
     def test_current_jspace_v2_digests_are_verified_and_rendered(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

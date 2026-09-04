@@ -201,6 +201,32 @@ class NativeTuraTaskCapsule:
         }
 
     def render_task(self) -> str:
+        """Render the complete verified capsule for fallback task bootstrap."""
+
+        return self._render_task(include_context_sources=True)
+
+    def render_dispatch(self) -> str:
+        """Render a compact, ready-to-send first-class Native Codex task."""
+
+        lines = [
+            "$tura-kernel",
+            "",
+            "NATIVE_TURA_INLINE_CAPSULE_V1",
+            "The Commander already verified and rendered this immutable task capsule.",
+            (
+                "Do not run the capsule loader or re-read or re-hash bound evidence "
+                "only to validate dispatch input."
+            ),
+            (
+                "Use task_projection first. Read Native evidence only when a required "
+                "result field is absent from that projection."
+            ),
+            "",
+            self._render_task(include_context_sources=False).rstrip("\n"),
+        ]
+        return "\n".join(lines) + "\n"
+
+    def _render_task(self, *, include_context_sources: bool) -> str:
         packet = self.task_packet
         lines = [
             "MISSION",
@@ -244,10 +270,16 @@ class NativeTuraTaskCapsule:
                     f"context_file_sha256={context.context_sha256}",
                     f"jspace_file_sha256={context.jspace_sha256}",
                     f"task_projection={context.projection_json}",
-                    f"task_context_capsule={context.context_json}",
-                    f"jspace_contract={context.jspace_json}",
+                    f"jspace_policy={_render_jspace_policy(context.jspace_json)}",
                 )
             )
+            if include_context_sources:
+                lines.extend(
+                    (
+                        f"task_context_capsule={context.context_json}",
+                        f"jspace_contract={context.jspace_json}",
+                    )
+                )
         return "\n".join(lines) + "\n"
 
 
@@ -1418,6 +1450,27 @@ def _canonical_json_text(value: object) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
+def _render_jspace_policy(jspace_json: str) -> str:
+    """Project only execution-relevant J-Space fields into the Native prompt."""
+
+    jspace = json.loads(jspace_json)
+    keys = (
+        "schema_version",
+        "repo_root",
+        "read_scopes",
+        "write_scopes",
+        "allowed_operations",
+        "denied_operations",
+        "command_prefixes",
+        "command_templates",
+        "declared_targets",
+        "expansion",
+        "authorization_semantic_sha256",
+        "semantic_sha256",
+    )
+    return _canonical_json_text({key: jspace[key] for key in keys if key in jspace})
+
+
 def _fsync_directory(path: Path) -> None:
     descriptor = os.open(path, os.O_RDONLY)
     try:
@@ -1432,7 +1485,9 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     load = subparsers.add_parser("load", help="load one task-bound capsule")
     load.add_argument("--task-name", required=True)
-    load.add_argument("--format", choices=("json", "task"), default="task")
+    load.add_argument(
+        "--format", choices=("dispatch", "json", "task"), default="task"
+    )
     install = subparsers.add_parser(
         "install-skill", help="install or verify the packaged Native Tura Skill"
     )
@@ -1447,6 +1502,8 @@ def main(argv: list[str] | None = None) -> int:
             capsule = load_native_tura_task_capsule(args.task_name, root=args.root)
             if args.format == "json":
                 print(json.dumps(capsule.to_wire(), sort_keys=True))
+            elif args.format == "dispatch":
+                print(capsule.render_dispatch(), end="")
             else:
                 print(capsule.render_task(), end="")
             return 0
