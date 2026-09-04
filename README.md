@@ -32,6 +32,9 @@ compatibility resource rather than the operational dispatch baseline. See
 [`docs/native-tura-role.md`](docs/native-tura-role.md) for the topology and
 drift-safe installation procedure.
 
+Native Tura dispatch uses `thinking="max"` as its default and highest admitted
+reasoning effort. The Skill does not advertise `ultra` as a Tura tier.
+
 The package also retains an optional, transport-neutral
 [`TuraAdapter`](src/codex_collaboration_harness/adapters/tura.py). It turns the
 generic task/lease contract into a bounded Tura request and maps a third-party

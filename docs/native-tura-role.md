@@ -9,6 +9,10 @@ interruption, and terminal state. Tura adds only the execution policy needed to
 keep one mission on its first false predicate and returns one official
 `send_message_to_thread` callback.
 
+The Commander creates these tasks with `thinking="max"`. This is the Skill's
+default and highest admitted reasoning effort. `ultra` is not a Tura Kernel
+tier and must be rejected rather than silently relabeled or downgraded.
+
 The canonical Skill resources are packaged at:
 
 ```text

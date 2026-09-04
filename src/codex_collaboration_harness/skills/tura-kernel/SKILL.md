@@ -9,6 +9,12 @@ Run inside the current first-class Codex task. Codex remains the sole owner of
 the task/thread, session persistence, rollout, tools, provider turn, process
 lifecycle, and restart recovery. Tura supplies execution policy only.
 
+The Commander must create Native Tura tasks with `thinking="max"`. `max` is
+the default and highest admitted reasoning effort for this Skill; do not request
+or report `ultra` as a Tura Kernel tier. An operator may explicitly choose a
+lower supported effort for a particular task, but the Skill must never silently
+raise, lower, or relabel the task's actual Native Codex reasoning metadata.
+
 Read [references/native-topology.md](references/native-topology.md) when
 diagnosing ownership, callback delivery, or legacy-surface retirement.
 
@@ -26,7 +32,9 @@ dispatch input. Require these fields before performing effects:
 - `callback_id`
 
 Accept task-local scope, authority, evidence references, acceptance criteria,
-model, and service tier when supplied. Do not invent missing authority or infer
+model, reasoning effort, and service tier when supplied. Reject a declared
+reasoning effort above `max` as `TURA_REASONING_EFFORT_UNSUPPORTED`; do not
+silently downgrade it. Do not invent missing authority or infer
 task input from chat history, filenames, task titles, sibling tasks, or stale
 Tura state.
 

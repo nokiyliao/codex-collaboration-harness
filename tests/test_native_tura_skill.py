@@ -11,6 +11,7 @@ from io import StringIO
 from pathlib import Path
 
 from codex_collaboration_harness.native_tura import (
+    NATIVE_TURA_REASONING_EFFORT,
     NATIVE_TURA_SKILL_MEMBERS,
     NativeTuraPacketError,
     install_native_tura_skill,
@@ -19,13 +20,16 @@ from codex_collaboration_harness.native_tura import (
 
 
 EXPECTED_DIGESTS = {
-    "SKILL.md": "21dc5ea6fb2a9bfb50236b932af67831c1714f261a0349896c1d4cde7127d353",
-    "agents/openai.yaml": "3681a7529082e001b6d27983054eeb4cabafdbe26d6ffbe317ec384a4b9f56c2",
+    "SKILL.md": "d0cd6914ad6c76a271d06db6a6c1578149f3251bc4df25ee1aeb76a6a383702d",
+    "agents/openai.yaml": "afd2cefb13e0c8c54ba7f0ed2c54c6dcbfac9fba514415d8e6a518bf396bc0c8",
     "references/native-topology.md": "df83e8637a7434e50fd1eee86c8c80626cd2d79ab002667e8301571ae93855e5",
 }
 
 
 class NativeTuraSkillTests(unittest.TestCase):
+    def test_reasoning_effort_contract_is_max(self) -> None:
+        self.assertEqual(NATIVE_TURA_REASONING_EFFORT, "max")
+
     def test_packaged_members_match_reviewed_identity(self) -> None:
         root = files("codex_collaboration_harness").joinpath(
             "skills", "tura-kernel"
@@ -79,6 +83,7 @@ class NativeTuraSkillTests(unittest.TestCase):
             receipt = json.loads(output.getvalue())
             self.assertEqual(receipt["status"], "installed")
             self.assertEqual(receipt["members"], EXPECTED_DIGESTS)
+            self.assertEqual(receipt["reasoning_effort"], "max")
 
 
 if __name__ == "__main__":

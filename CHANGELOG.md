@@ -7,6 +7,11 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix Native Tura dispatch reasoning at the supported `max` ceiling and reject
+  `ultra` rather than silently relabeling or downgrading a task.
+
 ### Added
 
 - Package the source-authoritative `$tura-kernel` Skill, metadata, and Native

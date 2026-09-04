@@ -34,6 +34,7 @@ LEGACY_NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v1"
 NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v2"
 MAX_CAPSULE_BYTES = 512 * 1024
 NATIVE_TURA_SKILL_NAME = "tura-kernel"
+NATIVE_TURA_REASONING_EFFORT = "max"
 NATIVE_TURA_SKILL_MEMBERS = (
     "SKILL.md",
     "agents/openai.yaml",
@@ -309,6 +310,7 @@ def install_native_tura_skill(
     return {
         "status": status,
         "skill": NATIVE_TURA_SKILL_NAME,
+        "reasoning_effort": NATIVE_TURA_REASONING_EFFORT,
         "target": str(target),
         "members": {
             relative: hashlib.sha256(payload).hexdigest()
