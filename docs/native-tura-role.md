@@ -17,13 +17,20 @@ codex_collaboration_harness/agents/tura.toml
 Its reviewed SHA-256 is:
 
 ```text
-66fe64b57770f1155770e234706d074d55e467c15fc47c99683b2f43918cfb3b
+2383fb6d65b3d9c71f6e5b972ae6718e723a3f684c9b55c9139a7c9fccba8983
 ```
 
 The role does not contain or launch a Gateway, Router, Session DB, provider
 runtime, daemon, MCP relay, queue, or callback transport. It also does not grant
 authority: the parent task packet and Native Codex tool boundary remain
 authoritative.
+
+When Native Codex cannot expose the dynamic parent message to the child, the
+parent publishes one content-addressed task capsule under the child's canonical
+task name. The dependency-free `tura-taskpacket` command verifies the capsule's
+TaskPacket identity, callback binding, digest filename, regular-file shape,
+mode, and link count before rendering the five decision fields. This is an
+immutable input bootstrap, not a second task database or dispatcher.
 
 ## Drift-Safe Installation
 
@@ -74,6 +81,16 @@ SHORTEST_VALID_ROUTE
 EXPECTED_PREDICATE_DELTA
 ABANDON_IF
 ```
+
+If the dynamic message is unreadable, the role instead runs exactly one:
+
+```bash
+tura-taskpacket load --task-name /root/example_task --format task
+```
+
+The task name is only a lookup key. The child must use the verified capsule
+contents, including the exact parent thread and callback identity, and must not
+infer instructions from the name itself.
 
 The child uses the same Native Codex persistence and tools as other Codex
 children. Its terminal response returns over the same direct-parent callback.

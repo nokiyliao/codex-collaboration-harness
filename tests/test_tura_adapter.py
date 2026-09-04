@@ -103,7 +103,7 @@ class TuraAdapterConformanceTests(unittest.TestCase):
         )
         self.assertEqual(
             hashlib.sha256(role_bytes).hexdigest(),
-            "66fe64b57770f1155770e234706d074d55e467c15fc47c99683b2f43918cfb3b",
+            "2383fb6d65b3d9c71f6e5b972ae6718e723a3f684c9b55c9139a7c9fccba8983",
         )
         role = tomllib.loads(role_bytes.decode("utf-8"))
         self.assertEqual(role["name"], "tura")
@@ -120,6 +120,7 @@ class TuraAdapterConformanceTests(unittest.TestCase):
             "return the first exact typed blocker to the direct parent",
             instructions,
         )
+        self.assertIn("tura-taskpacket load", instructions)
 
     def test_tura_dispatch_golden_vector_matches_request_identity(self) -> None:
         golden = json.loads(

@@ -26,10 +26,12 @@ REQUIRED_PATHS = (
     ".github/pull_request_template.md",
     "src/codex_collaboration_harness/__init__.py",
     "src/codex_collaboration_harness/core.py",
+    "src/codex_collaboration_harness/native_tura.py",
     "src/codex_collaboration_harness/agents/tura.toml",
     "src/codex_collaboration_harness/py.typed",
     "tests/test_harness.py",
     "tests/test_tura_adapter.py",
+    "tests/test_native_tura_role.py",
     "examples/synthetic_demo.py",
     "evidence/internal_benchmark_summary.json",
     "evidence/provenance_manifest.json",
@@ -50,7 +52,7 @@ REQUIRED_PATHS = (
     "src/codex_collaboration_harness/protocol/golden/tura_failure_v1.json",
 )
 NATIVE_TURA_ROLE_SHA256 = (
-    "66fe64b57770f1155770e234706d074d55e467c15fc47c99683b2f43918cfb3b"
+    "2383fb6d65b3d9c71f6e5b972ae6718e723a3f684c9b55c9139a7c9fccba8983"
 )
 EXCLUDED_DIRECTORIES = {
     ".git",
@@ -176,6 +178,9 @@ def _check_pyproject(errors: list[str]) -> None:
         )
     if project.get("dependencies") not in (None, []):
         errors.append("runtime dependencies must remain empty")
+    scripts = project.get("scripts", {})
+    if scripts.get("tura-taskpacket") != "codex_collaboration_harness.native_tura:main":
+        errors.append("project.scripts must expose the Native Tura task loader")
 
 
 def _check_ci(errors: list[str]) -> None:
@@ -318,6 +323,7 @@ def _check_native_tura_role(errors: list[str]) -> None:
         "EXPECTED_PREDICATE_DELTA",
         "ABANDON_IF",
         "Do not create another goal, database, lifecycle owner",
+        "tura-taskpacket load",
     ):
         if required not in instructions:
             errors.append(f"Native Tura role is missing {required!r}")

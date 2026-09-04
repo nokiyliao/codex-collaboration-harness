@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 REQUIRED_PACKAGE_MEMBERS = (
+    "codex_collaboration_harness/native_tura.py",
     "codex_collaboration_harness/agents/tura.toml",
     "codex_collaboration_harness/py.typed",
     "codex_collaboration_harness/protocol/tura_dispatch_request_v1.schema.json",
@@ -25,7 +26,7 @@ REQUIRED_PACKAGE_MEMBERS = (
     "codex_collaboration_harness/protocol/golden/tura_failure_v1.json",
 )
 NATIVE_TURA_ROLE_SHA256 = (
-    "66fe64b57770f1155770e234706d074d55e467c15fc47c99683b2f43918cfb3b"
+    "2383fb6d65b3d9c71f6e5b972ae6718e723a3f684c9b55c9139a7c9fccba8983"
 )
 
 
@@ -126,6 +127,12 @@ def _verify_clean_install(wheel: Path, version: str) -> None:
             "print(harness.__file__)"
         )
         subprocess.run([str(python), "-I", "-c", check], cwd=root, check=True)
+        subprocess.run(
+            [str(venv / "bin" / "tura-taskpacket"), "--help"],
+            cwd=root,
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
         subprocess.run([str(python), "-m", "pip", "check"], cwd=root, check=True)
 
 

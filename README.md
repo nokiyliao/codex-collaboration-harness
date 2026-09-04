@@ -106,8 +106,10 @@ Until a release is installed, the source-tree equivalent is:
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-There is no CLI or daemon in the reference package. Start with the public
-objects exported by `codex_collaboration_harness`; see
+There is no runtime daemon or lifecycle service in the reference package. The
+only CLI, `tura-taskpacket`, verifies and renders an immutable Native Tura task
+capsule; it does not create sessions, dispatch workers, or write callbacks.
+Start with the public objects exported by `codex_collaboration_harness`; see
 [`docs/verification.md`](docs/verification.md) for the exact verification
 contract and [`docs/architecture.md`](docs/architecture.md) for the lifecycle.
 

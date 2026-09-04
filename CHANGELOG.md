@@ -7,6 +7,18 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+### Added
+
+- Add a content-addressed Native Tura task capsule and dependency-free
+  `tura-taskpacket` loader so a Native Codex child can recover its exact bounded
+  task from its canonical task name without a Codex core patch or second
+  lifecycle service.
+
+### Changed
+
+- Bind the packaged Native Tura role to the verified capsule bootstrap when a
+  dynamic parent message is unavailable or unreadable.
+
 ## [0.2.1] - 2026-09-03
 
 ### Changed
