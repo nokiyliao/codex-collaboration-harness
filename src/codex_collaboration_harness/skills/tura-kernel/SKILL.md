@@ -59,7 +59,9 @@ Tura-internal children or copy full history to simulate packet transport.
 ### Read-only fast path
 
 When `NATIVE_TURA_READ_ONLY_FAST_PATH_V1` and
-`NATIVE_TURA_FAST_PATH_EXECUTION_V2` are present:
+`NATIVE_TURA_FAST_PATH_EXECUTION_V3` are present, the inline fast-path contract
+is complete. Do not read this Skill file again from the task; execute the inline
+contract directly:
 
 1. After this Skill read, emit no commentary before or between task reads.
 2. The first task-read stage must be one Native batched-read stage containing

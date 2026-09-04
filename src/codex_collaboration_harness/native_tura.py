@@ -40,7 +40,7 @@ NATIVE_TURA_PACKET_INSPECTION_VERSION = "native-tura-packet-inspection/v1"
 NATIVE_TURA_TERMINAL_SCHEMA_VERSION = "tura_native_terminal_v1"
 NATIVE_TURA_TERMINAL_MARKER = "[TURA_NATIVE_TERMINAL_V1]"
 NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER = "NATIVE_TURA_READ_ONLY_FAST_PATH_V1"
-NATIVE_TURA_FAST_PATH_EXECUTION_MARKER = "NATIVE_TURA_FAST_PATH_EXECUTION_V2"
+NATIVE_TURA_FAST_PATH_EXECUTION_MARKER = "NATIVE_TURA_FAST_PATH_EXECUTION_V3"
 MAX_CAPSULE_BYTES = 512 * 1024
 MAX_NATIVE_TERMINAL_BYTES = 64 * 1024
 MAX_NATIVE_TERMINAL_EVIDENCE_ITEMS = 32
@@ -482,9 +482,12 @@ class NativeTuraTaskCapsule:
                     "",
                     NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER,
                     NATIVE_TURA_FAST_PATH_EXECUTION_MARKER,
+                    "skill_file_read=forbidden; this inline fast-path contract is complete",
                     "first_task_read_stage=include CODEX_THREAD_ID and every task read",
                     "task_id_only_followup=forbidden",
                     "intermediate_commentary=forbidden",
+                    "harness_source_test_inspection=forbidden",
+                    "after_first_read=fill terminal template and call send_message_to_thread once",
                     f"post_callback_final=DELIVERED {self.callback_id}",
                     "",
                     "NATIVE_TURA_CANONICAL_TERMINAL_TEMPLATE_V1",

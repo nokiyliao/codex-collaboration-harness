@@ -7,6 +7,15 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-09-05
+
+### Changed
+
+- Make the read-only fast-path dispatch contract self-contained and explicitly
+  forbid a redundant Skill-file read. This trades a few hundred deterministic
+  prompt bytes for removal of an entire Native tool continuation; the rule is
+  limited to the read-only fast path and leaves long-task Skill policy lazy.
+
 ## [0.3.7] - 2026-09-05
 
 ### Added

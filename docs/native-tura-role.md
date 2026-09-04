@@ -140,15 +140,16 @@ started with different model or target settings from reusing the old callback.
 
 When every declared scope starts with `read:`, the compiler also emits
 `NATIVE_TURA_READ_ONLY_FAST_PATH_V1` and
-`NATIVE_TURA_FAST_PATH_EXECUTION_V2`. The worker performs one batched Native
+`NATIVE_TURA_FAST_PATH_EXECUTION_V3`. The inline contract is complete, so the
+worker does not read the Skill file before performing one batched Native
 read stage that includes `CODEX_THREAD_ID` plus every task read, then sends the
 canonical terminal without a later identity-only read, harness source/test
 inspection, or child-side render/parse loop. Callback identity and no-retry
 semantics remain unchanged; the parent still performs exact terminal intake.
-After callback success the task emits only `DELIVERED <callback_id>`. Static
-execution policy lives only in the versioned Skill; the prompt carries its
-version/digest, task-local fields, fast-path markers, and exact terminal
-template. The compiler also embeds the exact two-line
+After callback success the task emits only `DELIVERED <callback_id>`. General
+execution policy lives in the versioned Skill; the prompt carries the small
+self-contained fast-path contract because one repeated provider round costs far
+more than those deterministic bytes. The compiler also embeds the exact two-line
 `NATIVE_TURA_CANONICAL_TERMINAL_TEMPLATE_V1`, including the bound callback,
 parent, mission, predicate, and canonical marker; the worker fills only observed
 terminal fields. Its single read batch uses zsh-safe variable names and exact or

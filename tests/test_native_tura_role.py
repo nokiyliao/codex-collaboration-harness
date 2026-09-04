@@ -345,6 +345,15 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
 
             self.assertIn(NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER, dispatch)
             self.assertIn(NATIVE_TURA_FAST_PATH_EXECUTION_MARKER, dispatch)
+            self.assertIn(
+                "skill_file_read=forbidden; this inline fast-path contract is complete",
+                dispatch,
+            )
+            self.assertIn(
+                "after_first_read=fill terminal template and call "
+                "send_message_to_thread once",
+                dispatch,
+            )
             self.assertIn("CODEX_THREAD_ID", dispatch)
             self.assertIn("task_id_only_followup=forbidden", dispatch)
             self.assertIn("intermediate_commentary=forbidden", dispatch)

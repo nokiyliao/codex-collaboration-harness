@@ -123,7 +123,7 @@ capsule can be compiled into exact official `create_thread` arguments with:
 tura-taskpacket prepare-dispatch --task-name /root/example_task
 ```
 
-The resulting dispatch-plan v2 JSON binds the model, reasoning effort, target,
+The resulting dispatch-plan v3 JSON binds the model, reasoning effort, target,
 Skill contract, prompt digest, callback identity, and parent thread. It also
 reports exact UTF-8 byte counts for the dispatch, projected task context, and
 J-Space policy plus the inline evidence-reference count. The Commander still
@@ -145,7 +145,9 @@ digest are needed; this avoids carrying the per-packet rows into a callback turn
 
 Capsules whose scopes are all explicitly prefixed with `read:` receive the
 `NATIVE_TURA_READ_ONLY_FAST_PATH_V1` and
-`NATIVE_TURA_FAST_PATH_EXECUTION_V2` markers. Those tasks obtain
+`NATIVE_TURA_FAST_PATH_EXECUTION_V3` markers. The inline fast-path contract is
+self-contained, so those tasks do not spend a Native tool continuation reading
+the Skill file. They obtain
 `CODEX_THREAD_ID` in the same first batch as every task read, proceed directly
 to the single terminal callback, and emit only a fixed delivery acknowledgement
 after tool success. The compiler embeds the exact two-line canonical terminal
