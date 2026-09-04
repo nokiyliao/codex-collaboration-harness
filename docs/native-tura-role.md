@@ -132,8 +132,9 @@ Compile the verified capsule into exact official task-creation arguments with:
 tura-taskpacket prepare-dispatch --task-name /root/example_task
 ```
 
-This command is a pure compiler: it emits one deterministic dispatch identity
-and a `create_thread` argument object, but it does not call `create_thread`.
+This command is a pure compiler: it emits one deterministic dispatch identity,
+one exact Skill-contract digest, deterministic payload-size metrics, and a
+`create_thread` argument object, but it does not call `create_thread`.
 Changing the execution profile changes the callback identity, preventing a task
 started with different model or target settings from reusing the old callback.
 
@@ -142,7 +143,9 @@ When every declared scope starts with `read:`, the compiler also emits
 Native read stage, resolves its task ID directly from `CODEX_THREAD_ID`, and
 sends the canonical terminal without inspecting harness source/tests or doing a
 child-side render/parse loop. Callback identity and no-retry semantics remain
-unchanged; the parent still performs exact terminal intake. This removes
+unchanged; the parent still performs exact terminal intake. Static execution
+policy lives only in the versioned Skill; the prompt carries its version/digest,
+task-local fields, fast-path marker, and exact terminal template. This removes
 redundant provider turns from small verification tasks without weakening the
 general effecting-task contract. The compiler also embeds the exact two-line
 `NATIVE_TURA_CANONICAL_TERMINAL_TEMPLATE_V1`, including the bound callback,
@@ -177,6 +180,12 @@ loads the unique highest immutable revision and must use the verified capsule
 contents, including the exact parent thread and callback identity, and must not
 infer instructions from the name itself.
 
+Use `tura-taskpacket inspect-packets` for a read-only root inventory. Its
+deterministic classifications are `CURRENT_PROFILED`, `LEGACY_READABLE`, and
+`REJECTED`. Digest-only filenames are accepted only for immutable capsule v1;
+the loader never migrates those bytes, and their absent execution profile keeps
+them ineligible for `prepare-dispatch`.
+
 The task uses Native Codex persistence and tools. At terminal it performs one
 official `send_message_to_thread` call to the bound parent. No external Tura
 request, Session DB, Gateway, Router, or terminal-envelope transport
@@ -188,6 +197,9 @@ The callback body has one canonical machine-readable shape: the exact marker
 `parse_native_tura_terminal_callback()` API verifies the callback, parent, and
 task identities. Historical prose, key/value, or alternate-marker callbacks
 are not silently accepted as equivalent terminal state.
+The complete marker plus JSON callback is limited to 65,536 UTF-8 bytes and 32
+evidence items. Larger output must be represented by concise immutable refs,
+digests, media type, and size rather than inline payload bytes.
 
 Native delivery confirmation is schema-light: a normally returned
 `CallToolResult` whose `isError` is absent or `false` confirms delivery. The

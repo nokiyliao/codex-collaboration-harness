@@ -34,11 +34,15 @@ LEGACY_NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v1"
 NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v2"
 PROFILED_NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v3"
 NATIVE_TURA_EXECUTION_PROFILE_VERSION = "native-tura-execution-profile/v1"
-NATIVE_TURA_DISPATCH_PLAN_VERSION = "native-tura-dispatch-plan/v1"
+NATIVE_TURA_DISPATCH_PLAN_VERSION = "native-tura-dispatch-plan/v2"
+NATIVE_TURA_SKILL_CONTRACT_VERSION = "tura-kernel-skill-contract/v1"
+NATIVE_TURA_PACKET_INSPECTION_VERSION = "native-tura-packet-inspection/v1"
 NATIVE_TURA_TERMINAL_SCHEMA_VERSION = "tura_native_terminal_v1"
 NATIVE_TURA_TERMINAL_MARKER = "[TURA_NATIVE_TERMINAL_V1]"
 NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER = "NATIVE_TURA_READ_ONLY_FAST_PATH_V1"
 MAX_CAPSULE_BYTES = 512 * 1024
+MAX_NATIVE_TERMINAL_BYTES = 64 * 1024
+MAX_NATIVE_TERMINAL_EVIDENCE_ITEMS = 32
 NATIVE_TURA_SKILL_NAME = "tura-kernel"
 NATIVE_TURA_REASONING_EFFORT = "max"
 NATIVE_TURA_SKILL_MEMBERS = (
@@ -51,6 +55,7 @@ _TASK_PROJECTION_SCHEMA = re.compile(r"^[a-z0-9][a-z0-9._-]*/v1$")
 _CAPSULE_FILENAME = re.compile(
     r"^(?P<revision>[0-9]{20})-(?P<sha256>[0-9a-f]{64})\.json$"
 )
+_LEGACY_CAPSULE_FILENAME = re.compile(r"^(?P<sha256>[0-9a-f]{64})\.json$")
 _PACKET_KEYS = {
     "abandon_if",
     "destination",
@@ -318,6 +323,14 @@ class NativeTuraTerminal:
             raise NativeTuraPacketError(
                 "NATIVE_TERMINAL_SHAPE_INVALID", "evidence must be a tuple"
             )
+        if len(self.evidence) > MAX_NATIVE_TERMINAL_EVIDENCE_ITEMS:
+            raise NativeTuraPacketError(
+                "NATIVE_TERMINAL_EVIDENCE_LIMIT_EXCEEDED",
+                (
+                    f"evidence has {len(self.evidence)} items; maximum is "
+                    f"{MAX_NATIVE_TERMINAL_EVIDENCE_ITEMS}"
+                ),
+            )
         try:
             _canonical_json_text(list(self.evidence))
         except (TypeError, ValueError) as error:
@@ -338,6 +351,15 @@ class NativeTuraTerminal:
             raise NativeTuraPacketError(
                 "NATIVE_TERMINAL_EFFECT_COUNT_INVALID",
                 "protected_effect_count must be a non-negative integer",
+            )
+        rendered_size = len(self._render_unchecked().encode("utf-8"))
+        if rendered_size > MAX_NATIVE_TERMINAL_BYTES:
+            raise NativeTuraPacketError(
+                "NATIVE_TERMINAL_TOO_LARGE",
+                (
+                    f"terminal is {rendered_size} bytes; maximum is "
+                    f"{MAX_NATIVE_TERMINAL_BYTES}"
+                ),
             )
 
     def to_wire(self) -> dict[str, Any]:
@@ -361,6 +383,9 @@ class NativeTuraTerminal:
         return canonical_sha256(self.to_wire())
 
     def render(self) -> str:
+        return self._render_unchecked()
+
+    def _render_unchecked(self) -> str:
         return f"{NATIVE_TURA_TERMINAL_MARKER}\n{_canonical_json_text(self.to_wire())}\n"
 
 
@@ -418,24 +443,13 @@ class NativeTuraTaskCapsule:
     def render_dispatch(self) -> str:
         """Render a compact, ready-to-send first-class Native Codex task."""
 
+        skill_contract = _native_tura_skill_contract_identity()
         lines = [
             "$tura-kernel",
             "",
             "NATIVE_TURA_INLINE_CAPSULE_V1",
-            "The Commander already verified and rendered this immutable task capsule.",
-            (
-                "Do not run the capsule loader or re-read or re-hash bound evidence "
-                "only to validate dispatch input."
-            ),
-            (
-                "Use task_projection first. Read Native evidence only when a required "
-                "result field is absent from that projection."
-            ),
-            (
-                "A send_message_to_thread call is delivered when it returns normally "
-                "and CallToolResult.isError is not true. Do not require "
-                "structuredContent or a status field."
-            ),
+            f"skill_contract_version={skill_contract['schema_version']}",
+            f"skill_contract_sha256={skill_contract['semantic_sha256']}",
         ]
         if _uses_read_only_fast_path(self.task_packet):
             terminal_template = NativeTuraTerminal(
@@ -455,39 +469,8 @@ class NativeTuraTaskCapsule:
                 (
                     "",
                     NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER,
-                    "All admitted execution scopes are explicitly read-only.",
-                    "Use one batched Native read stage for all independent checks.",
-                    (
-                        "Native command shells are zsh: never assign its special "
-                        "parameters path, status, commands, or pipestatus. Use "
-                        "descriptive names such as candidate_path and worktree_state."
-                    ),
-                    (
-                        "For hidden installed roots, use exact known paths or "
-                        "rg --files --hidden --no-ignore; do not infer absence from "
-                        "a default hidden-file search."
-                    ),
-                    (
-                        "Do not inspect harness source or tests to rediscover callback "
-                        "formatting already present in this dispatch."
-                    ),
-                    "Do not perform child-side terminal render-then-parse self-verification.",
-                    (
-                        "Resolve task_thread_id once from CODEX_THREAD_ID; if it is "
-                        "missing, return TURA_NATIVE_TASK_ID_UNAVAILABLE."
-                    ),
-                    (
-                        "After the read batch, send the canonical terminal callback "
-                        "immediately without intermediate progress narration."
-                    ),
                     "",
                     "NATIVE_TURA_CANONICAL_TERMINAL_TEMPLATE_V1",
-                    (
-                        "Use the exact two-line callback below. Replace CODEX_THREAD_ID, "
-                        "predicate_delta, evidence, and status only when the observed "
-                        "result requires it; keep the marker, key set, bound identities, "
-                        "mission, and predicate unchanged."
-                    ),
                     terminal_template,
                 )
             )
@@ -628,6 +611,7 @@ def install_native_tura_skill(
     return {
         "status": status,
         "skill": NATIVE_TURA_SKILL_NAME,
+        "skill_contract": _native_tura_skill_contract_identity(payloads),
         "reasoning_effort": NATIVE_TURA_REASONING_EFFORT,
         "target": str(target),
         "members": {
@@ -651,6 +635,23 @@ def _native_tura_skill_payloads() -> dict[str, bytes]:
             "SKILL_PACKAGE_MEMBER_MISSING", str(error)
         ) from error
     return payloads
+
+
+def _native_tura_skill_contract_identity(
+    payloads: dict[str, bytes] | None = None,
+) -> dict[str, str]:
+    member_payloads = payloads if payloads is not None else _native_tura_skill_payloads()
+    identity = {
+        "schema_version": NATIVE_TURA_SKILL_CONTRACT_VERSION,
+        "members": {
+            relative: hashlib.sha256(payload).hexdigest()
+            for relative, payload in sorted(member_payloads.items())
+        },
+    }
+    return {
+        "schema_version": NATIVE_TURA_SKILL_CONTRACT_VERSION,
+        "semantic_sha256": canonical_sha256(identity),
+    }
 
 
 def _stage_native_tura_skill(
@@ -898,6 +899,132 @@ def load_native_tura_task_capsule(
         )
     latest_revision = max(revisions)
     return _load_capsule_path(revisions[latest_revision][0], task_name)
+
+
+def inspect_native_tura_packets(
+    *, root: str | os.PathLike[str] | None = None
+) -> dict[str, Any]:
+    """Classify every immutable packet revision without changing packet state."""
+
+    packet_root = Path(root) if root is not None else default_native_tura_packet_root()
+    if not packet_root.exists():
+        raise NativeTuraPacketError(
+            "TASK_PACKET_NOT_FOUND", f"packet root does not exist: {packet_root}"
+        )
+    _require_plain_root(packet_root)
+    rows: list[dict[str, Any]] = []
+    for task_dir in sorted(packet_root.iterdir(), key=lambda path: path.name):
+        if task_dir.is_symlink() or not task_dir.is_dir():
+            rows.append(
+                _rejected_packet_inspection_row(
+                    packet_root,
+                    task_dir,
+                    "TASK_PACKET_DIRECTORY_INVALID",
+                    "packet root member must be a plain task directory",
+                )
+            )
+            continue
+        members = sorted(task_dir.iterdir(), key=lambda path: path.name)
+        if not members:
+            rows.append(
+                _rejected_packet_inspection_row(
+                    packet_root,
+                    task_dir,
+                    "TASK_PACKET_NOT_FOUND",
+                    "task packet directory is empty",
+                )
+            )
+            continue
+        for path in members:
+            try:
+                revision, path_sha256 = _capsule_file_identity(path)
+                task_name = _inspection_task_name(path)
+                if task_dir.name != _task_directory_name(task_name):
+                    raise NativeTuraPacketError(
+                        "TASK_NAME_BINDING_MISMATCH",
+                        "packet directory does not bind its canonical task name",
+                    )
+                capsule = _load_capsule_path(path, task_name)
+                schema_version = capsule.to_wire()["schema_version"]
+                classification = (
+                    "CURRENT_PROFILED"
+                    if capsule.execution_profile is not None
+                    else "LEGACY_READABLE"
+                )
+                rows.append(
+                    {
+                        "classification": classification,
+                        "relative_path": str(path.relative_to(packet_root)),
+                        "canonical_task_name": task_name,
+                        "mission_revision": revision,
+                        "capsule_sha256": path_sha256,
+                        "schema_version": schema_version,
+                        "dispatchable": classification == "CURRENT_PROFILED",
+                        "error": None,
+                    }
+                )
+            except (NativeTuraPacketError, OSError) as error:
+                if isinstance(error, NativeTuraPacketError):
+                    code, detail = error.code, error.detail
+                else:
+                    code, detail = "TASK_PACKET_INSPECTION_IO_ERROR", str(error)
+                rows.append(
+                    _rejected_packet_inspection_row(
+                        packet_root, path, code, detail
+                    )
+                )
+    counts = {
+        classification: sum(
+            row["classification"] == classification for row in rows
+        )
+        for classification in ("CURRENT_PROFILED", "LEGACY_READABLE", "REJECTED")
+    }
+    payload = {
+        "schema_version": NATIVE_TURA_PACKET_INSPECTION_VERSION,
+        "root": str(packet_root.resolve()),
+        "counts": counts,
+        "packets": rows,
+    }
+    return {**payload, "inspection_sha256": canonical_sha256(payload)}
+
+
+def _inspection_task_name(path: Path) -> str:
+    if path.is_symlink() or not path.is_file():
+        raise NativeTuraPacketError(
+            "TASK_PACKET_MEMBER_INVALID", "capsule must be a regular non-symlink file"
+        )
+    metadata = path.stat()
+    if metadata.st_size > MAX_CAPSULE_BYTES:
+        raise NativeTuraPacketError(
+            "TASK_CAPSULE_TOO_LARGE",
+            f"capsule is {metadata.st_size} bytes; maximum is {MAX_CAPSULE_BYTES}",
+        )
+    try:
+        wire = json.loads(
+            path.read_text(encoding="ascii"), object_pairs_hook=_unique_object
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise NativeTuraPacketError("TASK_PACKET_JSON_INVALID", str(error)) from error
+    if not isinstance(wire, dict):
+        raise NativeTuraPacketError(
+            "TASK_PACKET_JSON_INVALID", "capsule must be an object"
+        )
+    return _require_task_name(wire.get("canonical_task_name"))
+
+
+def _rejected_packet_inspection_row(
+    packet_root: Path, path: Path, code: str, detail: str
+) -> dict[str, Any]:
+    return {
+        "classification": "REJECTED",
+        "relative_path": str(path.relative_to(packet_root)),
+        "canonical_task_name": None,
+        "mission_revision": None,
+        "capsule_sha256": None,
+        "schema_version": None,
+        "dispatchable": False,
+        "error": {"code": code, "detail": detail},
+    }
 
 
 def _load_capsule_path(path: Path, task_name: str) -> NativeTuraTaskCapsule:
@@ -1785,6 +1912,8 @@ def prepare_native_tura_dispatch(capsule: NativeTuraTaskCapsule) -> dict[str, An
         )
     prompt = capsule.render_dispatch()
     prompt_sha256 = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    skill_contract = _native_tura_skill_contract_identity()
+    context_metrics = _dispatch_context_metrics(capsule.verified_task_context)
     identity = {
         "schema_version": NATIVE_TURA_DISPATCH_PLAN_VERSION,
         "canonical_task_name": capsule.canonical_task_name,
@@ -1792,11 +1921,15 @@ def prepare_native_tura_dispatch(capsule: NativeTuraTaskCapsule) -> dict[str, An
         "callback_id": capsule.callback_id,
         "parent_thread_id": capsule.parent_thread_id,
         "execution_profile_sha256": profile.profile_sha256,
+        "skill_contract_sha256": skill_contract["semantic_sha256"],
         "prompt_sha256": prompt_sha256,
     }
     return {
         **identity,
         "dispatch_id": "tura_dispatch_" + canonical_sha256(identity),
+        "dispatch_utf8_bytes": len(prompt.encode("utf-8")),
+        **context_metrics,
+        "skill_contract": skill_contract,
         "create_thread": {
             "model": profile.model,
             "thinking": profile.thinking,
@@ -1812,6 +1945,26 @@ def prepare_native_tura_dispatch(capsule: NativeTuraTaskCapsule) -> dict[str, An
     }
 
 
+def _dispatch_context_metrics(
+    context: VerifiedTaskContext | None,
+) -> dict[str, int]:
+    if context is None:
+        return {
+            "projection_utf8_bytes": 0,
+            "jspace_policy_utf8_bytes": 0,
+            "inline_evidence_count": 0,
+        }
+    context_payload = json.loads(context.context_json)
+    evidence_refs = context_payload["evidence_refs"]
+    return {
+        "projection_utf8_bytes": len(context.projection_json.encode("utf-8")),
+        "jspace_policy_utf8_bytes": len(
+            _render_jspace_policy(context.jspace_json).encode("utf-8")
+        ),
+        "inline_evidence_count": len(evidence_refs),
+    }
+
+
 def parse_native_tura_terminal_callback(
     text: str,
     *,
@@ -1824,6 +1977,12 @@ def parse_native_tura_terminal_callback(
     if not isinstance(text, str):
         raise NativeTuraPacketError(
             "NATIVE_TERMINAL_SHAPE_INVALID", "callback prompt must be text"
+        )
+    size = len(text.encode("utf-8"))
+    if size > MAX_NATIVE_TERMINAL_BYTES:
+        raise NativeTuraPacketError(
+            "NATIVE_TERMINAL_TOO_LARGE",
+            f"terminal is {size} bytes; maximum is {MAX_NATIVE_TERMINAL_BYTES}",
         )
     marker, separator, payload_text = text.strip().partition("\n")
     if marker != NATIVE_TURA_TERMINAL_MARKER or not separator:
@@ -1929,18 +2088,60 @@ def _capsule_filename(revision: int, capsule_sha256: str) -> str:
 
 def _capsule_file_identity(path: Path) -> tuple[int, str]:
     match = _CAPSULE_FILENAME.fullmatch(path.name)
-    if match is None:
+    if match is not None:
+        return int(match.group("revision")), match.group("sha256")
+
+    legacy_match = _LEGACY_CAPSULE_FILENAME.fullmatch(path.name)
+    if legacy_match is None:
         raise NativeTuraPacketError(
             "TASK_PACKET_DIRECTORY_MEMBERS_INVALID",
             f"unexpected task packet member: {path.name!r}",
         )
-    return int(match.group("revision")), match.group("sha256")
+    if path.is_symlink() or not path.is_file():
+        raise NativeTuraPacketError(
+            "TASK_PACKET_MEMBER_INVALID", "capsule must be a regular non-symlink file"
+        )
+    size = path.stat().st_size
+    if size > MAX_CAPSULE_BYTES:
+        raise NativeTuraPacketError(
+            "TASK_CAPSULE_TOO_LARGE",
+            f"capsule is {size} bytes; maximum is {MAX_CAPSULE_BYTES}",
+        )
+    try:
+        wire = json.loads(
+            path.read_text(encoding="ascii"), object_pairs_hook=_unique_object
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise NativeTuraPacketError("TASK_PACKET_JSON_INVALID", str(error)) from error
+    if not isinstance(wire, dict):
+        raise NativeTuraPacketError(
+            "TASK_PACKET_JSON_INVALID", "capsule must be an object"
+        )
+    if wire.get("schema_version") != LEGACY_NATIVE_TURA_CAPSULE_VERSION:
+        raise NativeTuraPacketError(
+            "TASK_CAPSULE_LEGACY_FILENAME_UNSUPPORTED",
+            "digest-only filenames are readable only for native-tura-task-capsule/v1",
+        )
+    packet = wire.get("task_packet")
+    if not isinstance(packet, dict):
+        raise NativeTuraPacketError(
+            "TASK_PACKET_SHAPE_INVALID", "task_packet must be an object"
+        )
+    revision = _require_int("task_packet.mission_revision", packet.get("mission_revision"))
+    if revision < 0:
+        raise NativeTuraPacketError(
+            "TASK_PACKET_SHAPE_INVALID", "mission_revision must be non-negative"
+        )
+    return revision, legacy_match.group("sha256")
 
 
 def _capsule_files(task_dir: Path) -> list[Path]:
     members = sorted(task_dir.iterdir())
     invalid = [
-        path.name for path in members if _CAPSULE_FILENAME.fullmatch(path.name) is None
+        path.name
+        for path in members
+        if _CAPSULE_FILENAME.fullmatch(path.name) is None
+        and _LEGACY_CAPSULE_FILENAME.fullmatch(path.name) is None
     ]
     if invalid:
         raise NativeTuraPacketError(
@@ -2111,6 +2312,10 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="atomically replace a different plain installed Skill",
     )
+    subparsers.add_parser(
+        "inspect-packets",
+        help="classify current, legacy-readable, and rejected packet revisions",
+    )
     return parser
 
 
@@ -2135,6 +2340,9 @@ def main(argv: list[str] | None = None) -> int:
                 codex_home=args.codex_home, replace=args.replace
             )
             print(json.dumps(receipt, sort_keys=True))
+            return 0
+        if args.command == "inspect-packets":
+            print(json.dumps(inspect_native_tura_packets(root=args.root), sort_keys=True))
             return 0
         raise AssertionError(f"unhandled command: {args.command}")
     except NativeTuraPacketError as error:

@@ -40,6 +40,8 @@ Its provenance transformation is recorded in
 - The aggregate does not isolate the causal contribution of mission selection,
   leases, context projection, callbacks, model behavior, or any other component.
 - Token and time measurements depend on the frozen runner and environment.
+- Wall time must come from the external task observer's persisted start and
+  terminal timestamps, never from a model-reported duration field.
 - A p-value does not establish practical generality, independence of trials, or
   absence of selection bias.
 - Zero recorded safety events applies only to the measured trials and counters.

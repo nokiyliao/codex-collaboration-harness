@@ -7,6 +7,27 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-09-05
+
+### Added
+
+- Add read-only `tura-taskpacket inspect-packets` inventory with deterministic
+  `CURRENT_PROFILED`, `LEGACY_READABLE`, and `REJECTED` classifications.
+- Report exact dispatch, task-projection, J-Space-policy UTF-8 byte counts and
+  inline evidence-reference count in Native dispatch plan v2.
+- Bind each compact dispatch and Skill installation receipt to the canonical
+  three-member Tura Skill contract digest.
+
+### Changed
+
+- Move repeated execution policy out of every Native dispatch and keep it in the
+  versioned Skill. A representative read-only context dispatch falls from 4,331
+  to 2,971 UTF-8 bytes while retaining its exact terminal template.
+- Accept historical digest-only filenames for immutable v1 packet reads without
+  migrating them or making unprofiled packets dispatchable.
+- Bound Native terminal callbacks to 65,536 UTF-8 bytes and 32 evidence items;
+  larger artifacts must be returned by immutable reference and digest.
+
 ## [0.3.5] - 2026-09-05
 
 ### Fixed

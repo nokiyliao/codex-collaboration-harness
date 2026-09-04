@@ -27,7 +27,7 @@
     "mission": {"type": "string", "minLength": 1},
     "predicate": {"type": "string", "minLength": 1},
     "predicate_delta": {"type": "string", "minLength": 1},
-    "evidence": {"type": "array"},
+    "evidence": {"type": "array", "maxItems": 32},
     "first_typed_blocker": {"type": ["string", "null"]},
     "authority_effect": {"type": "string", "minLength": 1},
     "protected_effect_count": {"type": "integer", "minimum": 0}

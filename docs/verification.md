@@ -109,9 +109,10 @@ documentation. Its direct evidence is:
 | Tura transport/terminal failure | Transport exceptions and explicit terminal failures become deterministic typed failures |
 | Tura identity closure | Packet, lease, request, and executor drift is rejected before becoming a core result |
 | Tura/core failure composition | Execution failures and typed rejections preserve the exact failure code, detail digest, and observed effect across the adapter-to-core boundary; a second execution is blocked until explicit `NONE` or `SETTLED` reconciliation |
-| Native Tura task bootstrap | A canonical Native task name resolves the unique highest immutable capsule revision; TaskPacket, callback, revision, content digest, file mode, link count, duplicate-key, tamper, traversal, stale-revision, and same-revision conflict checks fail closed before execution |
-| Native execution profile | Model, admitted reasoning effort, official task target, prompt digest, and callback identity compile into one deterministic `create_thread` plan; unsupported `ultra` is rejected rather than downgraded |
-| Native callback intake | Only the exact marker plus canonical terminal JSON is accepted; callback, parent, and task identity mismatches fail before mission intake |
+| Native Tura task bootstrap | A canonical Native task name resolves the unique highest immutable capsule revision; TaskPacket, callback, revision, content digest, file mode, link count, duplicate-key, tamper, traversal, stale-revision, and same-revision conflict checks fail closed before execution. Historical digest-only v1 filenames are readable but remain unprofiled and non-dispatchable. |
+| Native packet inventory | Read-only inspection classifies every revision as `CURRENT_PROFILED`, `LEGACY_READABLE`, or `REJECTED` and binds the complete deterministic result to one digest without migration. |
+| Native execution profile | Model, admitted reasoning effort, official task target, Skill-contract digest, prompt digest, exact UTF-8 size metrics, and callback identity compile into one deterministic `create_thread` plan; unsupported `ultra` is rejected rather than downgraded. |
+| Native callback intake | Only the exact marker plus canonical terminal JSON is accepted; callback, parent, and task identity mismatches fail before mission intake, callbacks over 65,536 UTF-8 bytes fail, and evidence is capped at 32 items. |
 | Skill adoption | Identical installation is a no-op, drift is rejected by default, and explicit replacement records the preimage and verifies the new target atomically |
 | Artifact/source parity | Wheel and sdist package member sets and bytes exactly equal the source package, and the installed wheel exposes the same Skill and protocol resources |
 

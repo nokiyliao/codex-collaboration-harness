@@ -166,3 +166,8 @@ be retried blindly.
 
 The child task's final response is fallback evidence only. Mission convergence
 belongs to the parent Commander after callback intake.
+
+The complete marker plus JSON callback must not exceed 65,536 UTF-8 bytes and
+`evidence` must contain at most 32 items. Keep each item concise and use
+immutable references, digests, media types, and byte sizes for large artifacts;
+do not inline large logs, source files, reports, or binary content.

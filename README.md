@@ -123,11 +123,24 @@ capsule can be compiled into exact official `create_thread` arguments with:
 tura-taskpacket prepare-dispatch --task-name /root/example_task
 ```
 
-The resulting JSON binds the model, reasoning effort, target, prompt digest,
-callback identity, and parent thread. The Commander still performs the official
-task creation. A reviewed Skill update can be adopted atomically with
-`tura-taskpacket install-skill --replace`; without `--replace`, any target drift
-continues to fail closed.
+The resulting dispatch-plan v2 JSON binds the model, reasoning effort, target,
+Skill contract, prompt digest, callback identity, and parent thread. It also
+reports exact UTF-8 byte counts for the dispatch, projected task context, and
+J-Space policy plus the inline evidence-reference count. The Commander still
+performs the official task creation. A reviewed Skill update can be adopted
+atomically with `tura-taskpacket install-skill --replace`; without `--replace`,
+any target drift continues to fail closed.
+
+Audit an existing packet root without migrating or dispatching anything with:
+
+```bash
+tura-taskpacket inspect-packets
+```
+
+The inventory separates current profile-bound packets from readable historical
+packets and exact rejected members. Historical digest-only v1 filenames remain
+readable, but they still fail `prepare-dispatch` because they have no execution
+profile.
 
 Capsules whose scopes are all explicitly prefixed with `read:` receive the
 `NATIVE_TURA_READ_ONLY_FAST_PATH_V1` execution marker. Those tasks batch their
@@ -137,6 +150,9 @@ contract. The compiler embeds the exact two-line canonical terminal template so
 the worker cannot drift to a historical marker while source/test discovery is
 disabled. The fast-path command contract also avoids zsh special-parameter
 collisions and requires hidden-root-aware file enumeration.
+The terminal marker plus canonical JSON is limited to 65,536 UTF-8 bytes and 32
+evidence items; large logs and artifacts travel as immutable references and
+digests rather than inline callback content.
 
 Start with the public objects exported by `codex_collaboration_harness`; see
 [`docs/verification.md`](docs/verification.md) for the exact verification

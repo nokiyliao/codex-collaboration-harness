@@ -20,14 +20,18 @@ from codex_collaboration_harness import (
 )
 from codex_collaboration_harness.native_tura import (
     LEGACY_NATIVE_TURA_CAPSULE_VERSION,
+    MAX_NATIVE_TERMINAL_BYTES,
+    MAX_NATIVE_TERMINAL_EVIDENCE_ITEMS,
     NATIVE_TURA_CAPSULE_VERSION,
     NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER,
+    NATIVE_TURA_PACKET_INSPECTION_VERSION,
     NATIVE_TURA_TERMINAL_MARKER,
     PROFILED_NATIVE_TURA_CAPSULE_VERSION,
     NativeTuraExecutionProfile,
     NativeTuraPacketError,
     NativeTuraTerminal,
     canonical_task_projection,
+    inspect_native_tura_packets,
     load_native_tura_task_capsule,
     main,
     parse_native_tura_terminal_callback,
@@ -308,9 +312,10 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
             self.assertIn("jspace_policy=", dispatch)
             self.assertNotIn("task_context_capsule=", dispatch)
             self.assertNotIn("jspace_contract=", dispatch)
-            self.assertIn("Do not run the capsule loader", dispatch)
-            self.assertIn("CallToolResult.isError is not true", dispatch)
-            self.assertIn("Do not require structuredContent", dispatch)
+            self.assertIn("skill_contract_version=", dispatch)
+            self.assertIn("skill_contract_sha256=", dispatch)
+            self.assertNotIn("Do not run the capsule loader", dispatch)
+            self.assertNotIn("CallToolResult.isError is not true", dispatch)
             self.assertNotIn(NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER, dispatch)
 
     def test_explicit_read_scopes_enable_single_batch_fast_path(self) -> None:
@@ -338,12 +343,9 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
             ).render_dispatch()
 
             self.assertIn(NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER, dispatch)
-            self.assertIn("one batched Native read stage", dispatch)
             self.assertIn("CODEX_THREAD_ID", dispatch)
-            self.assertIn("never assign its special parameters path, status", dispatch)
-            self.assertIn("rg --files --hidden --no-ignore", dispatch)
-            self.assertIn("Do not perform child-side terminal", dispatch)
-            self.assertIn("without intermediate progress narration", dispatch)
+            self.assertNotIn("never assign its special parameters path, status", dispatch)
+            self.assertNotIn("rg --files --hidden --no-ignore", dispatch)
             self.assertIn("NATIVE_TURA_CANONICAL_TERMINAL_TEMPLATE_V1", dispatch)
             self.assertEqual(dispatch.count(NATIVE_TURA_TERMINAL_MARKER), 1)
             marker_index = dispatch.index(f"{NATIVE_TURA_TERMINAL_MARKER}\n")
@@ -779,6 +781,48 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
                 loaded.mission, "Resume the same bounded Native Tura task."
             )
 
+    def test_digest_only_legacy_filename_is_readable_but_not_dispatchable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Read one historical Native Tura task.",
+                shortest_valid_route="Load the immutable v1 packet only.",
+                task_packet=make_packet(),
+                root=root,
+            )
+            wire = json.loads(path.read_text(encoding="ascii"))
+            legacy_path = path.with_name(f"{wire['capsule_sha256']}.json")
+            path.rename(legacy_path)
+
+            loaded = load_native_tura_task_capsule(TASK_NAME, root=root)
+
+            self.assertEqual(loaded.capsule_sha256, wire["capsule_sha256"])
+            self.assertEqual(loaded.task_packet.mission_revision, 1)
+            with self.assertRaisesRegex(
+                NativeTuraPacketError, "EXECUTION_PROFILE_MISSING"
+            ):
+                prepare_native_tura_dispatch(loaded)
+
+    def test_digest_only_filename_is_rejected_for_profiled_capsule(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Run one profiled Native Tura task.",
+                shortest_valid_route="Use the official Native Codex runtime.",
+                task_packet=make_packet(),
+                execution_profile=NativeTuraExecutionProfile(model="gpt-5.6-sol"),
+                root=root,
+            )
+            wire = json.loads(path.read_text(encoding="ascii"))
+            path.rename(path.with_name(f"{wire['capsule_sha256']}.json"))
+
+            with self.assertRaisesRegex(
+                NativeTuraPacketError, "TASK_CAPSULE_LEGACY_FILENAME_UNSUPPORTED"
+            ):
+                load_native_tura_task_capsule(TASK_NAME, root=root)
+
     def test_mutable_or_linked_capsule_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -868,6 +912,68 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
             self.assertEqual(error["status"], "rejected")
             self.assertEqual(error["code"], "TASK_PACKET_NOT_FOUND")
 
+    def test_inspect_packets_classifies_current_legacy_and_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Run one current task.",
+                shortest_valid_route="Use the official Native task runtime.",
+                task_packet=make_packet(),
+                execution_profile=NativeTuraExecutionProfile(model="gpt-5.6-sol"),
+                root=root,
+            )
+            legacy_name = "/root/native_tura_legacy"
+            legacy_path = publish_native_tura_task_capsule(
+                canonical_task_name=legacy_name,
+                mission="Read one historical task.",
+                shortest_valid_route="Inspect only.",
+                task_packet=make_packet(),
+                root=root,
+            )
+            legacy_wire = json.loads(legacy_path.read_text(encoding="ascii"))
+            legacy_path.rename(
+                legacy_path.with_name(f"{legacy_wire['capsule_sha256']}.json")
+            )
+            rejected = root / "not-a-task-directory"
+            rejected.write_text("not a packet", encoding="ascii")
+
+            inspection = inspect_native_tura_packets(root=root)
+
+            self.assertEqual(
+                inspection["schema_version"], NATIVE_TURA_PACKET_INSPECTION_VERSION
+            )
+            self.assertEqual(
+                inspection["counts"],
+                {"CURRENT_PROFILED": 1, "LEGACY_READABLE": 1, "REJECTED": 1},
+            )
+            current = next(
+                row
+                for row in inspection["packets"]
+                if row["classification"] == "CURRENT_PROFILED"
+            )
+            legacy = next(
+                row
+                for row in inspection["packets"]
+                if row["classification"] == "LEGACY_READABLE"
+            )
+            self.assertTrue(current["dispatchable"])
+            self.assertFalse(legacy["dispatchable"])
+            payload = {
+                key: value
+                for key, value in inspection.items()
+                if key != "inspection_sha256"
+            }
+            self.assertEqual(
+                inspection["inspection_sha256"], canonical_sha256(payload)
+            )
+
+            output = StringIO()
+            with redirect_stdout(output):
+                exit_code = main(["--root", str(root), "inspect-packets"])
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(json.loads(output.getvalue()), inspection)
+
 
 class NativeTuraDispatchContractTests(unittest.TestCase):
     def test_profile_bound_capsule_prepares_exact_create_thread_request(self) -> None:
@@ -917,8 +1023,51 @@ class NativeTuraDispatchContractTests(unittest.TestCase):
                 plan["prompt_sha256"],
             )
             self.assertEqual(
+                plan["dispatch_utf8_bytes"],
+                len(plan["create_thread"]["prompt"].encode("utf-8")),
+            )
+            self.assertEqual(plan["projection_utf8_bytes"], 0)
+            self.assertEqual(plan["jspace_policy_utf8_bytes"], 0)
+            self.assertEqual(plan["inline_evidence_count"], 0)
+            self.assertEqual(
+                plan["skill_contract"]["semantic_sha256"],
+                plan["skill_contract_sha256"],
+            )
+            self.assertEqual(
                 plan["terminal_contract"]["callback_id"], loaded.callback_id
             )
+
+    def test_context_dispatch_reports_exact_deterministic_size_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binding = _write_context_pair(root / "evidence")
+            publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Use one task-local evidence projection.",
+                shortest_valid_route="Use the projected task evidence first.",
+                task_packet=make_packet(task_context_binding=binding),
+                execution_profile=NativeTuraExecutionProfile(model="gpt-5.6-sol"),
+                root=root / "packets",
+            )
+            loaded = load_native_tura_task_capsule(TASK_NAME, root=root / "packets")
+
+            plan = prepare_native_tura_dispatch(loaded)
+            prompt = plan["create_thread"]["prompt"]
+            projection = loaded.verified_task_context.projection_json
+            jspace_line = next(
+                line.removeprefix("jspace_policy=")
+                for line in prompt.splitlines()
+                if line.startswith("jspace_policy=")
+            )
+
+            self.assertEqual(plan["dispatch_utf8_bytes"], len(prompt.encode("utf-8")))
+            self.assertEqual(
+                plan["projection_utf8_bytes"], len(projection.encode("utf-8"))
+            )
+            self.assertEqual(
+                plan["jspace_policy_utf8_bytes"], len(jspace_line.encode("utf-8"))
+            )
+            self.assertEqual(plan["inline_evidence_count"], 1)
 
     def test_prepare_dispatch_cli_emits_the_same_plan(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1036,6 +1185,54 @@ class NativeTuraDispatchContractTests(unittest.TestCase):
         ):
             parse_native_tura_terminal_callback(
                 rendered, expected_task_thread_id="thread.other"
+            )
+
+    def test_terminal_accepts_exact_byte_limit_and_rejects_one_more_byte(self) -> None:
+        common = {
+            "callback_id": "callback",
+            "parent_thread_id": "parent",
+            "task_thread_id": "task",
+            "status": "PREDICATE_ADVANCED",
+            "mission": "mission",
+            "predicate": "predicate",
+            "evidence": (),
+            "first_typed_blocker": None,
+            "authority_effect": "none",
+            "protected_effect_count": 0,
+        }
+        baseline = NativeTuraTerminal(predicate_delta="x", **common)
+        padding = MAX_NATIVE_TERMINAL_BYTES - len(baseline.render().encode("utf-8"))
+        boundary = NativeTuraTerminal(predicate_delta="x" * (padding + 1), **common)
+
+        rendered = boundary.render()
+
+        self.assertEqual(len(rendered.encode("utf-8")), MAX_NATIVE_TERMINAL_BYTES)
+        self.assertEqual(parse_native_tura_terminal_callback(rendered), boundary)
+        with self.assertRaisesRegex(
+            NativeTuraPacketError, "NATIVE_TERMINAL_TOO_LARGE"
+        ):
+            NativeTuraTerminal(predicate_delta="x" * (padding + 2), **common)
+        with self.assertRaisesRegex(
+            NativeTuraPacketError, "NATIVE_TERMINAL_TOO_LARGE"
+        ):
+            parse_native_tura_terminal_callback(rendered + " ")
+
+    def test_terminal_rejects_more_than_32_evidence_items(self) -> None:
+        with self.assertRaisesRegex(
+            NativeTuraPacketError, "NATIVE_TERMINAL_EVIDENCE_LIMIT_EXCEEDED"
+        ):
+            NativeTuraTerminal(
+                callback_id="callback",
+                parent_thread_id="parent",
+                task_thread_id="task",
+                status="PREDICATE_ADVANCED",
+                mission="mission",
+                predicate="predicate",
+                predicate_delta="false -> true",
+                evidence=tuple(range(MAX_NATIVE_TERMINAL_EVIDENCE_ITEMS + 1)),
+                first_typed_blocker=None,
+                authority_effect="none",
+                protected_effect_count=0,
             )
 
     def test_noncanonical_historical_callback_shapes_are_rejected(self) -> None:

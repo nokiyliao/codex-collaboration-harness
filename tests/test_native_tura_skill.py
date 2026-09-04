@@ -63,6 +63,13 @@ class NativeTuraSkillTests(unittest.TestCase):
             self.assertEqual(installed["status"], "installed")
             self.assertEqual(replayed["status"], "unchanged")
             self.assertEqual(installed["members"], expected_digests)
+            self.assertEqual(
+                installed["skill_contract"], replayed["skill_contract"]
+            )
+            self.assertEqual(
+                installed["skill_contract"]["schema_version"],
+                "tura-kernel-skill-contract/v1",
+            )
             target = codex_home / "skills" / "tura-kernel"
             for relative, expected in expected_digests.items():
                 self.assertEqual(

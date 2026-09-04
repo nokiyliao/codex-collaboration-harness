@@ -207,7 +207,8 @@ def _verify_clean_install(
             capture_output=True,
             text=True,
         )
-        if "prepare-dispatch" not in help_result.stdout or "install-skill" not in help_result.stdout:
+        required_commands = ("prepare-dispatch", "install-skill", "inspect-packets")
+        if any(command not in help_result.stdout for command in required_commands):
             raise RuntimeError("installed Native Tura CLI is missing required commands")
         codex_home = root / "codex-home"
         install = subprocess.run(
@@ -230,6 +231,27 @@ def _verify_clean_install(
         }
         if receipt["members"] != expected_skill_members:
             raise RuntimeError("installed Native Tura Skill receipt differs")
+        packet_root = root / "packets"
+        packet_root.mkdir()
+        inspection = subprocess.run(
+            [
+                str(venv / "bin" / "tura-taskpacket"),
+                "--root",
+                str(packet_root),
+                "inspect-packets",
+            ],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        inventory = json.loads(inspection.stdout)
+        if inventory["counts"] != {
+            "CURRENT_PROFILED": 0,
+            "LEGACY_READABLE": 0,
+            "REJECTED": 0,
+        }:
+            raise RuntimeError("installed Native Tura packet inventory differs")
         subprocess.run([str(python), "-m", "pip", "check"], cwd=root, check=True)
 
 
