@@ -30,6 +30,16 @@ tura-taskpacket install-skill
 The command installs under `$CODEX_HOME/skills/tura-kernel` (defaulting to
 `~/.codex/skills/tura-kernel`). An identical target is a no-op; an existing
 different target fails with `SKILL_TARGET_PREIMAGE_DRIFT` and is not overwritten.
+After independently reviewing a new package, an operator can atomically adopt
+its exact Skill bytes with:
+
+```bash
+tura-taskpacket install-skill --replace
+```
+
+The replacement receipt records the previous member digests. Verification
+failure restores the prior directory; this does not modify Codex application
+bytes or introduce an updater service.
 
 The packaged `agents/tura.toml` resource remains available for compatibility
 with Native runtimes that expose named agent roles. It is not the first-class
@@ -111,6 +121,22 @@ EXPECTED_PREDICATE_DELTA
 ABANDON_IF
 ```
 
+For new mechanically prepared dispatches, the parent binds a
+`NativeTuraExecutionProfile` into capsule v3. The profile's digest covers the
+exact model, supported reasoning effort, and official project/projectless
+target. `ultra` is rejected rather than silently mapped to `max`.
+
+Compile the verified capsule into exact official task-creation arguments with:
+
+```bash
+tura-taskpacket prepare-dispatch --task-name /root/example_task
+```
+
+This command is a pure compiler: it emits one deterministic dispatch identity
+and a `create_thread` argument object, but it does not call `create_thread`.
+Changing the execution profile changes the callback identity, preventing a task
+started with different model or target settings from reusing the old callback.
+
 For a context-bound task, the parent should render the already-published,
 verified capsule into the initial Native task with:
 
@@ -141,6 +167,13 @@ The task uses Native Codex persistence and tools. At terminal it performs one
 official `send_message_to_thread` call to the bound parent. No external Tura
 request, Session DB, Gateway, Router, or terminal-envelope transport
 participates in this profile.
+
+The callback body has one canonical machine-readable shape: the exact marker
+`[TURA_NATIVE_TERMINAL_V1]`, a newline, and one JSON object conforming to
+`native_tura_terminal_v1.schema.json`. The public
+`parse_native_tura_terminal_callback()` API verifies the callback, parent, and
+task identities. Historical prose, key/value, or alternate-marker callbacks
+are not silently accepted as equivalent terminal state.
 
 Native delivery confirmation is schema-light: a normally returned
 `CallToolResult` whose `isError` is absent or `false` confirms delivery. The

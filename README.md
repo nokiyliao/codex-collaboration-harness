@@ -116,7 +116,18 @@ There is no runtime daemon or lifecycle service in the reference package. The
 only CLI, `tura-taskpacket`, installs or verifies the packaged Skill and renders
 an immutable Native Tura task capsule. Its `--format dispatch` view is a compact
 ready-to-send Native task with task-local evidence already projected; it does
-not create sessions, dispatch workers, or write callbacks.
+not create sessions, dispatch workers, or write callbacks. A profile-bound
+capsule can be compiled into exact official `create_thread` arguments with:
+
+```bash
+tura-taskpacket prepare-dispatch --task-name /root/example_task
+```
+
+The resulting JSON binds the model, reasoning effort, target, prompt digest,
+callback identity, and parent thread. The Commander still performs the official
+task creation. A reviewed Skill update can be adopted atomically with
+`tura-taskpacket install-skill --replace`; without `--replace`, any target drift
+continues to fail closed.
 Start with the public objects exported by `codex_collaboration_harness`; see
 [`docs/verification.md`](docs/verification.md) for the exact verification
 contract and [`docs/architecture.md`](docs/architecture.md) for the lifecycle.
@@ -137,6 +148,15 @@ tests, the synthetic demo, and import smoke check, run:
 make check
 ```
 
+For the complete release predicate, including removal of reproducible packaging
+state, deterministic sdist metadata, two byte-identical builds,
+source/wheel/sdist parity, isolated
+installation, CLI smoke test, and checksums, run:
+
+```bash
+make release-check
+```
+
 Networked verification of the public Tura component ref, exact Git trees,
 ancestry, license, and modification notice is deliberately separate:
 
@@ -146,8 +166,10 @@ make check-components
 
 The packaged protocol schemas and cross-language golden vectors live under
 [`src/codex_collaboration_harness/protocol`](src/codex_collaboration_harness/protocol).
-Both request and terminal envelopes are bound to
-`protocol_version=tura-collaboration/v1`.
+The external-runtime request and terminal envelopes are bound to
+`protocol_version=tura-collaboration/v1`. The preferred Native profile also
+packages schemas for the task projection, execution profile, and exact
+`[TURA_NATIVE_TERMINAL_V1]` callback.
 
 ## What Is Verified
 

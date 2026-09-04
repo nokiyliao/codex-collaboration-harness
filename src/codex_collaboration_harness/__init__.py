@@ -61,6 +61,21 @@ from .core import (
     canonical_sha256,
     verify_identity,
 )
+from .native_tura import (
+    NATIVE_TURA_DISPATCH_PLAN_VERSION,
+    NATIVE_TURA_EXECUTION_PROFILE_VERSION,
+    NATIVE_TURA_TERMINAL_MARKER,
+    NATIVE_TURA_TERMINAL_SCHEMA_VERSION,
+    NativeTuraExecutionProfile,
+    NativeTuraPacketError,
+    NativeTuraTaskCapsule,
+    NativeTuraTerminal,
+    canonical_task_projection,
+    load_native_tura_task_capsule,
+    parse_native_tura_terminal_callback,
+    prepare_native_tura_dispatch,
+    publish_native_tura_task_capsule,
+)
 
 __all__ = [
     "EXECUTOR_ORIGIN_FAILURE_CODES",
@@ -99,6 +114,14 @@ __all__ = [
     "MissionSupersessionDisposition",
     "MissionSupersessionState",
     "MissionVerification",
+    "NATIVE_TURA_DISPATCH_PLAN_VERSION",
+    "NATIVE_TURA_EXECUTION_PROFILE_VERSION",
+    "NATIVE_TURA_TERMINAL_MARKER",
+    "NATIVE_TURA_TERMINAL_SCHEMA_VERSION",
+    "NativeTuraExecutionProfile",
+    "NativeTuraPacketError",
+    "NativeTuraTaskCapsule",
+    "NativeTuraTerminal",
     "PredicateReadback",
     "PredicateTruth",
     "RecoveryAction",
@@ -120,5 +143,10 @@ __all__ = [
     "TerminalReceipt",
     "TerminalStatus",
     "canonical_sha256",
+    "canonical_task_projection",
+    "load_native_tura_task_capsule",
+    "parse_native_tura_terminal_callback",
+    "prepare_native_tura_dispatch",
+    "publish_native_tura_task_capsule",
     "verify_identity",
 ]

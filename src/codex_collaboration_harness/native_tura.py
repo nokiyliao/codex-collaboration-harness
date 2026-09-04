@@ -16,7 +16,7 @@ import shutil
 import stat
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
@@ -32,6 +32,11 @@ from .core import (
 
 LEGACY_NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v1"
 NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v2"
+PROFILED_NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v3"
+NATIVE_TURA_EXECUTION_PROFILE_VERSION = "native-tura-execution-profile/v1"
+NATIVE_TURA_DISPATCH_PLAN_VERSION = "native-tura-dispatch-plan/v1"
+NATIVE_TURA_TERMINAL_SCHEMA_VERSION = "tura_native_terminal_v1"
+NATIVE_TURA_TERMINAL_MARKER = "[TURA_NATIVE_TERMINAL_V1]"
 MAX_CAPSULE_BYTES = 512 * 1024
 NATIVE_TURA_SKILL_NAME = "tura-kernel"
 NATIVE_TURA_REASONING_EFFORT = "max"
@@ -93,6 +98,16 @@ _TASK_PROJECTION_KEYS = {
     "task_id",
     "task_visible_pre_task_evidence_only",
 }
+_EXECUTION_PROFILE_KEYS = {
+    "directory_name",
+    "environment",
+    "model",
+    "profile_sha256",
+    "project_id",
+    "schema_version",
+    "target_type",
+    "thinking",
+}
 _JSPACE_V1_KEYS = {
     "allowed_operations",
     "command_prefixes",
@@ -137,6 +152,10 @@ _CAPSULE_KEYS = {
     "task_packet",
 }
 _CAPSULE_KEYS_WITH_CONTEXT = _CAPSULE_KEYS | {"task_context_material"}
+_CAPSULE_KEYS_WITH_PROFILE = _CAPSULE_KEYS | {"execution_profile"}
+_CAPSULE_KEYS_WITH_PROFILE_AND_CONTEXT = _CAPSULE_KEYS_WITH_PROFILE | {
+    "task_context_material"
+}
 _TASK_CONTEXT_MATERIAL_KEYS = {
     "context_sha256",
     "context_source",
@@ -145,6 +164,26 @@ _TASK_CONTEXT_MATERIAL_KEYS = {
     "jspace_source",
     "task_id",
 }
+_NATIVE_TERMINAL_KEYS = {
+    "authority_effect",
+    "callback_id",
+    "evidence",
+    "first_typed_blocker",
+    "mission",
+    "parent_thread_id",
+    "predicate",
+    "predicate_delta",
+    "protected_effect_count",
+    "schema_version",
+    "status",
+    "task_thread_id",
+}
+_NATIVE_TERMINAL_STATUSES = {
+    "PREDICATE_ADVANCED",
+    "MISSION_COMPLETE",
+    "BLOCKED",
+}
+_NATIVE_REASONING_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 
 
 class NativeTuraPacketError(ValueError):
@@ -154,6 +193,170 @@ class NativeTuraPacketError(ValueError):
         self.code = code
         self.detail = detail
         super().__init__(f"{code}: {detail}")
+
+
+@dataclass(frozen=True, slots=True)
+class NativeTuraExecutionProfile:
+    """Exact Native Codex execution settings bound to one Tura dispatch."""
+
+    model: str
+    thinking: str = NATIVE_TURA_REASONING_EFFORT
+    target_type: str = "projectless"
+    project_id: str | None = None
+    environment: str | None = None
+    directory_name: str | None = None
+    schema_version: str = NATIVE_TURA_EXECUTION_PROFILE_VERSION
+    profile_sha256: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        if self.schema_version != NATIVE_TURA_EXECUTION_PROFILE_VERSION:
+            raise NativeTuraPacketError(
+                "EXECUTION_PROFILE_VERSION_UNSUPPORTED", self.schema_version
+            )
+        _require_text("execution_profile.model", self.model)
+        if self.thinking not in _NATIVE_REASONING_EFFORTS:
+            raise NativeTuraPacketError(
+                "TURA_REASONING_EFFORT_UNSUPPORTED",
+                f"thinking must be one of {sorted(_NATIVE_REASONING_EFFORTS)}",
+            )
+        if self.target_type == "projectless":
+            if self.project_id is not None or self.environment is not None:
+                raise NativeTuraPacketError(
+                    "EXECUTION_PROFILE_TARGET_INVALID",
+                    "projectless target cannot carry project_id or environment",
+                )
+            if self.directory_name is not None:
+                _require_text("execution_profile.directory_name", self.directory_name)
+        elif self.target_type == "project":
+            _require_text("execution_profile.project_id", self.project_id)
+            if self.environment not in {"local", "worktree"}:
+                raise NativeTuraPacketError(
+                    "EXECUTION_PROFILE_TARGET_INVALID",
+                    "project target environment must be local or worktree",
+                )
+            if self.directory_name is not None:
+                raise NativeTuraPacketError(
+                    "EXECUTION_PROFILE_TARGET_INVALID",
+                    "project target cannot carry directory_name",
+                )
+        else:
+            raise NativeTuraPacketError(
+                "EXECUTION_PROFILE_TARGET_INVALID",
+                "target_type must be project or projectless",
+            )
+        object.__setattr__(
+            self,
+            "profile_sha256",
+            canonical_sha256(_execution_profile_payload(self)),
+        )
+
+    def to_wire(self) -> dict[str, Any]:
+        return {
+            **_execution_profile_payload(self),
+            "profile_sha256": self.profile_sha256,
+        }
+
+    def create_thread_target(self) -> dict[str, Any]:
+        if self.target_type == "projectless":
+            target: dict[str, Any] = {"type": "projectless"}
+            if self.directory_name is not None:
+                target["directoryName"] = self.directory_name
+            return target
+        environment: dict[str, Any] = {"type": self.environment}
+        if self.environment == "worktree":
+            environment["startingState"] = {"type": "working-tree"}
+        return {
+            "type": "project",
+            "projectId": self.project_id,
+            "environment": environment,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class NativeTuraTerminal:
+    """Machine-readable terminal callback injected into the parent task."""
+
+    callback_id: str
+    parent_thread_id: str
+    task_thread_id: str
+    status: str
+    mission: str
+    predicate: str
+    predicate_delta: str
+    evidence: tuple[Any, ...]
+    first_typed_blocker: str | None
+    authority_effect: str
+    protected_effect_count: int
+    schema_version: str = NATIVE_TURA_TERMINAL_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        if self.schema_version != NATIVE_TURA_TERMINAL_SCHEMA_VERSION:
+            raise NativeTuraPacketError(
+                "NATIVE_TERMINAL_VERSION_UNSUPPORTED", self.schema_version
+            )
+        for name in (
+            "callback_id",
+            "parent_thread_id",
+            "task_thread_id",
+            "mission",
+            "predicate",
+            "predicate_delta",
+            "authority_effect",
+        ):
+            _require_text(f"native_terminal.{name}", getattr(self, name))
+        if self.status not in _NATIVE_TERMINAL_STATUSES:
+            raise NativeTuraPacketError(
+                "NATIVE_TERMINAL_STATUS_INVALID",
+                f"status must be one of {sorted(_NATIVE_TERMINAL_STATUSES)}",
+            )
+        if not isinstance(self.evidence, tuple):
+            raise NativeTuraPacketError(
+                "NATIVE_TERMINAL_SHAPE_INVALID", "evidence must be a tuple"
+            )
+        try:
+            _canonical_json_text(list(self.evidence))
+        except (TypeError, ValueError) as error:
+            raise NativeTuraPacketError(
+                "NATIVE_TERMINAL_SHAPE_INVALID",
+                f"evidence must contain canonical JSON values: {error}",
+            ) from error
+        if self.status == "BLOCKED":
+            _require_text(
+                "native_terminal.first_typed_blocker", self.first_typed_blocker
+            )
+        elif self.first_typed_blocker is not None:
+            raise NativeTuraPacketError(
+                "NATIVE_TERMINAL_BLOCKER_INVALID",
+                "successful terminal cannot carry first_typed_blocker",
+            )
+        if type(self.protected_effect_count) is not int or self.protected_effect_count < 0:
+            raise NativeTuraPacketError(
+                "NATIVE_TERMINAL_EFFECT_COUNT_INVALID",
+                "protected_effect_count must be a non-negative integer",
+            )
+
+    def to_wire(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "callback_id": self.callback_id,
+            "parent_thread_id": self.parent_thread_id,
+            "task_thread_id": self.task_thread_id,
+            "status": self.status,
+            "mission": self.mission,
+            "predicate": self.predicate,
+            "predicate_delta": self.predicate_delta,
+            "evidence": list(self.evidence),
+            "first_typed_blocker": self.first_typed_blocker,
+            "authority_effect": self.authority_effect,
+            "protected_effect_count": self.protected_effect_count,
+        }
+
+    @property
+    def payload_sha256(self) -> str:
+        return canonical_sha256(self.to_wire())
+
+    def render(self) -> str:
+        return f"{NATIVE_TURA_TERMINAL_MARKER}\n{_canonical_json_text(self.to_wire())}\n"
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +385,7 @@ class NativeTuraTaskCapsule:
     callback_id: str
     capsule_sha256: str
     verified_task_context: VerifiedTaskContext | None = None
+    execution_profile: NativeTuraExecutionProfile | None = None
 
     @property
     def parent_thread_id(self) -> str:
@@ -196,6 +400,7 @@ class NativeTuraTaskCapsule:
                 task_packet=self.task_packet,
                 callback_id=self.callback_id,
                 verified_task_context=self.verified_task_context,
+                execution_profile=self.execution_profile,
             ),
             "capsule_sha256": self.capsule_sha256,
         }
@@ -263,6 +468,18 @@ class NativeTuraTaskCapsule:
             f"scope_versions={json.dumps(packet.scope_versions, ensure_ascii=True)}",
             f"recovery_budget={packet.recovery_budget}",
         ]
+        profile = self.execution_profile
+        if profile is not None:
+            lines.extend(
+                (
+                    "",
+                    "NATIVE_EXECUTION_PROFILE",
+                    f"profile_sha256={profile.profile_sha256}",
+                    f"model={profile.model}",
+                    f"thinking={profile.thinking}",
+                    f"target={_canonical_json_text(profile.create_thread_target())}",
+                )
+            )
         context = self.verified_task_context
         if context is not None:
             lines.extend(
@@ -294,7 +511,9 @@ def default_native_tura_packet_root() -> Path:
 
 
 def install_native_tura_skill(
-    *, codex_home: str | os.PathLike[str] | None = None
+    *,
+    codex_home: str | os.PathLike[str] | None = None,
+    replace: bool = False,
 ) -> dict[str, Any]:
     """Install the packaged Skill atomically, or verify an identical target."""
 
@@ -312,23 +531,22 @@ def install_native_tura_skill(
             "SKILL_INSTALL_ROOT_INVALID", "Codex skills root must be a plain directory"
         )
 
+    previous_members: dict[str, str] | None = None
     if target.exists() or target.is_symlink():
-        _verify_native_tura_skill_target(target, payloads)
-        status = "unchanged"
-    else:
-        staging = Path(
-            tempfile.mkdtemp(prefix=f".{NATIVE_TURA_SKILL_NAME}.", dir=skill_parent)
-        )
         try:
-            for relative, payload in payloads.items():
-                destination = staging / relative
-                destination.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
-                with destination.open("xb") as stream:
-                    stream.write(payload)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                os.chmod(destination, 0o644)
-            os.chmod(staging, 0o755)
+            _verify_native_tura_skill_target(target, payloads)
+        except NativeTuraPacketError:
+            if not replace:
+                raise
+            previous_members = _replace_native_tura_skill_target(
+                skill_parent, target, payloads
+            )
+            status = "updated"
+        else:
+            status = "unchanged"
+    else:
+        staging = _stage_native_tura_skill(skill_parent, payloads)
+        try:
             try:
                 os.rename(staging, target)
             except OSError as error:
@@ -353,6 +571,7 @@ def install_native_tura_skill(
             relative: hashlib.sha256(payload).hexdigest()
             for relative, payload in sorted(payloads.items())
         },
+        "previous_members": previous_members,
     }
 
 
@@ -369,6 +588,77 @@ def _native_tura_skill_payloads() -> dict[str, bytes]:
             "SKILL_PACKAGE_MEMBER_MISSING", str(error)
         ) from error
     return payloads
+
+
+def _stage_native_tura_skill(
+    skill_parent: Path, payloads: dict[str, bytes]
+) -> Path:
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{NATIVE_TURA_SKILL_NAME}.", dir=skill_parent)
+    )
+    try:
+        for relative, payload in payloads.items():
+            destination = staging / relative
+            destination.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+            with destination.open("xb") as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.chmod(destination, 0o644)
+        os.chmod(staging, 0o755)
+        _fsync_directory(staging)
+        return staging
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+
+
+def _replace_native_tura_skill_target(
+    skill_parent: Path, target: Path, payloads: dict[str, bytes]
+) -> dict[str, str]:
+    if target.is_symlink() or not target.is_dir():
+        raise NativeTuraPacketError(
+            "SKILL_TARGET_PREIMAGE_DRIFT",
+            "replace target must be a plain directory",
+        )
+    entries = list(target.rglob("*"))
+    if any(entry.is_symlink() for entry in entries):
+        raise NativeTuraPacketError(
+            "SKILL_TARGET_PREIMAGE_DRIFT",
+            "replace target must not contain symlinks",
+        )
+    previous_members = {
+        entry.relative_to(target).as_posix(): hashlib.sha256(entry.read_bytes()).hexdigest()
+        for entry in entries
+        if entry.is_file()
+    }
+    staging = _stage_native_tura_skill(skill_parent, payloads)
+    backup = Path(
+        tempfile.mkdtemp(prefix=f".{NATIVE_TURA_SKILL_NAME}.preimage.", dir=skill_parent)
+    )
+    backup.rmdir()
+    replaced = False
+    try:
+        os.rename(target, backup)
+        try:
+            os.rename(staging, target)
+            _fsync_directory(skill_parent)
+            _verify_native_tura_skill_target(target, payloads)
+            replaced = True
+        except Exception:
+            if target.exists():
+                os.rename(target, staging)
+            if backup.exists():
+                os.rename(backup, target)
+                _fsync_directory(skill_parent)
+            raise
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
+        if replaced and backup.exists():
+            shutil.rmtree(backup)
+            _fsync_directory(skill_parent)
+    return previous_members
 
 
 def _verify_native_tura_skill_target(
@@ -408,6 +698,7 @@ def publish_native_tura_task_capsule(
     mission: str,
     shortest_valid_route: str,
     task_packet: TaskPacket,
+    execution_profile: NativeTuraExecutionProfile | None = None,
     root: str | os.PathLike[str] | None = None,
 ) -> Path:
     """Atomically publish one immutable capsule for a unique Native task name."""
@@ -416,6 +707,8 @@ def publish_native_tura_task_capsule(
     mission_text = _require_text("mission", mission)
     route_text = _require_text("shortest_valid_route", shortest_valid_route)
     task_packet = _decode_task_packet(_encode_task_packet(task_packet))
+    if execution_profile is not None:
+        execution_profile = _decode_execution_profile(execution_profile.to_wire())
 
     packet_root = Path(root) if root is not None else default_native_tura_packet_root()
     packet_root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -437,6 +730,7 @@ def publish_native_tura_task_capsule(
                 loaded.task_packet == task_packet
                 and loaded.mission == mission_text
                 and loaded.shortest_valid_route == route_text
+                and loaded.execution_profile == execution_profile
             ):
                 return same_revision[0]
         raise NativeTuraPacketError(
@@ -452,7 +746,13 @@ def publish_native_tura_task_capsule(
             )
 
     verified_task_context = _load_verified_task_context(task_packet)
-    callback_id = _callback_id(task_name, mission_text, route_text, task_packet)
+    callback_id = _callback_id(
+        task_name,
+        mission_text,
+        route_text,
+        task_packet,
+        execution_profile=execution_profile,
+    )
     payload = _capsule_payload(
         canonical_task_name=task_name,
         mission=mission_text,
@@ -460,6 +760,7 @@ def publish_native_tura_task_capsule(
         task_packet=task_packet,
         callback_id=callback_id,
         verified_task_context=verified_task_context,
+        execution_profile=execution_profile,
     )
     capsule_sha256 = canonical_sha256(payload)
     wire = {**payload, "capsule_sha256": capsule_sha256}
@@ -569,6 +870,13 @@ def _load_capsule_path(path: Path, task_name: str) -> NativeTuraTaskCapsule:
         _require_exact_keys("capsule", wire, _CAPSULE_KEYS)
     elif schema_version == NATIVE_TURA_CAPSULE_VERSION:
         _require_exact_keys("capsule", wire, _CAPSULE_KEYS_WITH_CONTEXT)
+    elif schema_version == PROFILED_NATIVE_TURA_CAPSULE_VERSION:
+        expected = (
+            _CAPSULE_KEYS_WITH_PROFILE_AND_CONTEXT
+            if "task_context_material" in wire
+            else _CAPSULE_KEYS_WITH_PROFILE
+        )
+        _require_exact_keys("capsule", wire, expected)
     else:
         raise NativeTuraPacketError(
             "TASK_CAPSULE_VERSION_UNSUPPORTED", str(schema_version)
@@ -595,6 +903,18 @@ def _load_capsule_path(path: Path, task_name: str) -> NativeTuraTaskCapsule:
             "TASK_CONTEXT_BINDING_MISMATCH",
             "native-tura-task-capsule/v2 requires a context-bound TaskPacket",
         )
+    execution_profile = (
+        _decode_execution_profile(wire["execution_profile"])
+        if schema_version == PROFILED_NATIVE_TURA_CAPSULE_VERSION
+        else None
+    )
+    if schema_version == PROFILED_NATIVE_TURA_CAPSULE_VERSION and (
+        (packet.task_context_binding is None) != ("task_context_material" not in wire)
+    ):
+        raise NativeTuraPacketError(
+            "TASK_CONTEXT_BINDING_MISMATCH",
+            "profiled capsule context material must match its TaskPacket binding",
+        )
     verified_task_context = _verified_task_context_from_material(
         packet, wire.get("task_context_material")
     )
@@ -605,7 +925,13 @@ def _load_capsule_path(path: Path, task_name: str) -> NativeTuraTaskCapsule:
         )
     mission = _require_text("mission", wire["mission"])
     route = _require_text("shortest_valid_route", wire["shortest_valid_route"])
-    expected_callback = _callback_id(task_name, mission, route, packet)
+    expected_callback = _callback_id(
+        task_name,
+        mission,
+        route,
+        packet,
+        execution_profile=execution_profile,
+    )
     if wire["callback_id"] != expected_callback:
         raise NativeTuraPacketError(
             "CALLBACK_IDENTITY_MISMATCH", "callback does not bind the exact task input"
@@ -628,6 +954,7 @@ def _load_capsule_path(path: Path, task_name: str) -> NativeTuraTaskCapsule:
         callback_id=expected_callback,
         capsule_sha256=expected_capsule_sha256,
         verified_task_context=verified_task_context,
+        execution_profile=execution_profile,
     )
 
 
@@ -639,12 +966,17 @@ def _capsule_payload(
     task_packet: TaskPacket,
     callback_id: str,
     verified_task_context: VerifiedTaskContext | None,
+    execution_profile: NativeTuraExecutionProfile | None,
 ) -> dict[str, Any]:
     payload = {
         "schema_version": (
-            NATIVE_TURA_CAPSULE_VERSION
-            if verified_task_context is not None
-            else LEGACY_NATIVE_TURA_CAPSULE_VERSION
+            PROFILED_NATIVE_TURA_CAPSULE_VERSION
+            if execution_profile is not None
+            else (
+                NATIVE_TURA_CAPSULE_VERSION
+                if verified_task_context is not None
+                else LEGACY_NATIVE_TURA_CAPSULE_VERSION
+            )
         ),
         "canonical_task_name": canonical_task_name,
         "mission": mission,
@@ -652,6 +984,8 @@ def _capsule_payload(
         "task_packet": _encode_task_packet(task_packet),
         "callback_id": callback_id,
     }
+    if execution_profile is not None:
+        payload["execution_profile"] = execution_profile.to_wire()
     if verified_task_context is not None:
         payload["task_context_material"] = {
             "task_id": verified_task_context.task_id,
@@ -1172,40 +1506,15 @@ def _validate_task_context(
             "TASK_CONTEXT_PROJECTION_INVALID",
             "context_summary must contain a task projection object",
         )
-    if _canonical_json_text(projection) != summary:
+    canonical_projection = canonical_task_projection(
+        projection, expected_task_id=binding.task_id
+    )
+    if canonical_projection != summary:
         raise NativeTuraPacketError(
             "TASK_CONTEXT_PROJECTION_INVALID",
             "context_summary task projection must use canonical JSON",
         )
-    _require_exact_context_keys("task projection", projection, _TASK_PROJECTION_KEYS)
-    projection_schema = projection.get("schema_version")
-    if not isinstance(projection_schema, str) or not _TASK_PROJECTION_SCHEMA.fullmatch(
-        projection_schema
-    ):
-        raise NativeTuraPacketError(
-            "TASK_CONTEXT_PROJECTION_INVALID",
-            "task projection must use a producer-namespaced /v1 schema",
-        )
-    if projection.get("task_id") != binding.task_id:
-        raise NativeTuraPacketError(
-            "TASK_CONTEXT_TASK_MISMATCH",
-            "task projection is bound to a different task",
-        )
-    if (
-        projection.get("task_visible_pre_task_evidence_only") is not True
-        or projection.get("answer_key_used") is not False
-    ):
-        raise NativeTuraPacketError(
-            "TASK_CONTEXT_PRETASK_EVIDENCE_REQUIRED",
-            "task projection is not verified pre-task-only evidence",
-        )
-    forbidden_path = _find_forbidden_oracle_key(projection)
-    if forbidden_path is not None:
-        raise NativeTuraPacketError(
-            "TASK_CONTEXT_ORACLE_MATERIAL_REJECTED",
-            f"task projection contains forbidden oracle marker at {forbidden_path}",
-        )
-    return _canonical_json_text(projection)
+    return canonical_projection
 
 
 def _validate_jspace_contract(jspace: dict[str, Any]) -> str:
@@ -1309,18 +1618,238 @@ def _find_forbidden_oracle_key(value: object, path: str = "projection") -> str |
     return None
 
 
-def _callback_id(
-    task_name: str, mission: str, shortest_valid_route: str, packet: TaskPacket
+def canonical_task_projection(
+    projection: object, *, expected_task_id: str | None = None
 ) -> str:
-    return "tura_callback_" + canonical_sha256(
-        {
-            "canonical_task_name": task_name,
-            "mission": mission,
-            "shortest_valid_route": shortest_valid_route,
-            "packet_id": packet.packet_id,
-            "parent_thread_id": packet.destination.thread_id,
-        }
+    """Validate and canonically encode one Native task-visible projection."""
+
+    if not isinstance(projection, dict):
+        raise NativeTuraPacketError(
+            "TASK_CONTEXT_PROJECTION_INVALID", "task projection must be an object"
+        )
+    _require_exact_context_keys("task projection", projection, _TASK_PROJECTION_KEYS)
+    schema = projection.get("schema_version")
+    if not isinstance(schema, str) or not _TASK_PROJECTION_SCHEMA.fullmatch(schema):
+        raise NativeTuraPacketError(
+            "TASK_CONTEXT_PROJECTION_INVALID",
+            "task projection must use a producer-namespaced /v1 schema",
+        )
+    task_id = _require_text("task projection.task_id", projection.get("task_id"))
+    if expected_task_id is not None and task_id != expected_task_id:
+        raise NativeTuraPacketError(
+            "TASK_CONTEXT_TASK_MISMATCH", "task projection is bound to a different task"
+        )
+    if (
+        projection.get("task_visible_pre_task_evidence_only") is not True
+        or projection.get("answer_key_used") is not False
+    ):
+        raise NativeTuraPacketError(
+            "TASK_CONTEXT_PRETASK_EVIDENCE_REQUIRED",
+            "task projection is not verified pre-task-only evidence",
+        )
+    forbidden_path = _find_forbidden_oracle_key(projection)
+    if forbidden_path is not None:
+        raise NativeTuraPacketError(
+            "TASK_CONTEXT_ORACLE_MATERIAL_REJECTED",
+            f"task projection contains forbidden oracle marker at {forbidden_path}",
+        )
+    return _canonical_json_text(projection)
+
+
+def _execution_profile_payload(
+    profile: NativeTuraExecutionProfile,
+) -> dict[str, Any]:
+    return {
+        "schema_version": profile.schema_version,
+        "model": profile.model,
+        "thinking": profile.thinking,
+        "target_type": profile.target_type,
+        "project_id": profile.project_id,
+        "environment": profile.environment,
+        "directory_name": profile.directory_name,
+    }
+
+
+def _decode_execution_profile(value: object) -> NativeTuraExecutionProfile:
+    if not isinstance(value, dict):
+        raise NativeTuraPacketError(
+            "EXECUTION_PROFILE_SHAPE_INVALID", "execution_profile must be an object"
+        )
+    _require_exact_keys("execution_profile", value, _EXECUTION_PROFILE_KEYS)
+    profile = NativeTuraExecutionProfile(
+        schema_version=_require_text(
+            "execution_profile.schema_version", value["schema_version"]
+        ),
+        model=_require_text("execution_profile.model", value["model"]),
+        thinking=_require_text("execution_profile.thinking", value["thinking"]),
+        target_type=_require_text(
+            "execution_profile.target_type", value["target_type"]
+        ),
+        project_id=(
+            None
+            if value["project_id"] is None
+            else _require_text("execution_profile.project_id", value["project_id"])
+        ),
+        environment=(
+            None
+            if value["environment"] is None
+            else _require_text("execution_profile.environment", value["environment"])
+        ),
+        directory_name=(
+            None
+            if value["directory_name"] is None
+            else _require_text(
+                "execution_profile.directory_name", value["directory_name"]
+            )
+        ),
     )
+    if value["profile_sha256"] != profile.profile_sha256:
+        raise NativeTuraPacketError(
+            "EXECUTION_PROFILE_IDENTITY_MISMATCH",
+            "execution profile digest cannot be recomputed",
+        )
+    return profile
+
+
+def prepare_native_tura_dispatch(capsule: NativeTuraTaskCapsule) -> dict[str, Any]:
+    """Compile one profile-bound capsule into official create_thread arguments."""
+
+    profile = capsule.execution_profile
+    if profile is None:
+        raise NativeTuraPacketError(
+            "EXECUTION_PROFILE_MISSING",
+            "prepare-dispatch requires a profile-bound Native Tura capsule",
+        )
+    prompt = capsule.render_dispatch()
+    prompt_sha256 = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    identity = {
+        "schema_version": NATIVE_TURA_DISPATCH_PLAN_VERSION,
+        "canonical_task_name": capsule.canonical_task_name,
+        "capsule_sha256": capsule.capsule_sha256,
+        "callback_id": capsule.callback_id,
+        "parent_thread_id": capsule.parent_thread_id,
+        "execution_profile_sha256": profile.profile_sha256,
+        "prompt_sha256": prompt_sha256,
+    }
+    return {
+        **identity,
+        "dispatch_id": "tura_dispatch_" + canonical_sha256(identity),
+        "create_thread": {
+            "model": profile.model,
+            "thinking": profile.thinking,
+            "prompt": prompt,
+            "target": profile.create_thread_target(),
+        },
+        "terminal_contract": {
+            "marker": NATIVE_TURA_TERMINAL_MARKER,
+            "schema_version": NATIVE_TURA_TERMINAL_SCHEMA_VERSION,
+            "callback_id": capsule.callback_id,
+            "parent_thread_id": capsule.parent_thread_id,
+        },
+    }
+
+
+def parse_native_tura_terminal_callback(
+    text: str,
+    *,
+    expected_callback_id: str | None = None,
+    expected_parent_thread_id: str | None = None,
+    expected_task_thread_id: str | None = None,
+) -> NativeTuraTerminal:
+    """Parse one callback prompt and enforce its task/callback bindings."""
+
+    if not isinstance(text, str):
+        raise NativeTuraPacketError(
+            "NATIVE_TERMINAL_SHAPE_INVALID", "callback prompt must be text"
+        )
+    marker, separator, payload_text = text.strip().partition("\n")
+    if marker != NATIVE_TURA_TERMINAL_MARKER or not separator:
+        raise NativeTuraPacketError(
+            "NATIVE_TERMINAL_MARKER_INVALID",
+            f"callback must begin with {NATIVE_TURA_TERMINAL_MARKER}",
+        )
+    try:
+        payload = json.loads(payload_text, object_pairs_hook=_unique_object)
+    except (json.JSONDecodeError, NativeTuraPacketError) as error:
+        raise NativeTuraPacketError(
+            "NATIVE_TERMINAL_JSON_INVALID", str(error)
+        ) from error
+    if not isinstance(payload, dict):
+        raise NativeTuraPacketError(
+            "NATIVE_TERMINAL_SHAPE_INVALID", "terminal payload must be an object"
+        )
+    _require_exact_keys("native terminal", payload, _NATIVE_TERMINAL_KEYS)
+    evidence = payload["evidence"]
+    if not isinstance(evidence, list):
+        raise NativeTuraPacketError(
+            "NATIVE_TERMINAL_SHAPE_INVALID", "evidence must be an array"
+        )
+    blocker = payload["first_typed_blocker"]
+    if blocker is not None and not isinstance(blocker, str):
+        raise NativeTuraPacketError(
+            "NATIVE_TERMINAL_SHAPE_INVALID",
+            "first_typed_blocker must be text or null",
+        )
+    terminal = NativeTuraTerminal(
+        schema_version=_require_text(
+            "native_terminal.schema_version", payload["schema_version"]
+        ),
+        callback_id=_require_text(
+            "native_terminal.callback_id", payload["callback_id"]
+        ),
+        parent_thread_id=_require_text(
+            "native_terminal.parent_thread_id", payload["parent_thread_id"]
+        ),
+        task_thread_id=_require_text(
+            "native_terminal.task_thread_id", payload["task_thread_id"]
+        ),
+        status=_require_text("native_terminal.status", payload["status"]),
+        mission=_require_text("native_terminal.mission", payload["mission"]),
+        predicate=_require_text("native_terminal.predicate", payload["predicate"]),
+        predicate_delta=_require_text(
+            "native_terminal.predicate_delta", payload["predicate_delta"]
+        ),
+        evidence=tuple(evidence),
+        first_typed_blocker=blocker,
+        authority_effect=_require_text(
+            "native_terminal.authority_effect", payload["authority_effect"]
+        ),
+        protected_effect_count=payload["protected_effect_count"],
+    )
+    mismatches: list[str] = []
+    for name, expected in (
+        ("callback_id", expected_callback_id),
+        ("parent_thread_id", expected_parent_thread_id),
+        ("task_thread_id", expected_task_thread_id),
+    ):
+        if expected is not None and getattr(terminal, name) != expected:
+            mismatches.append(name)
+    if mismatches:
+        raise NativeTuraPacketError(
+            "NATIVE_TERMINAL_IDENTITY_MISMATCH",
+            f"terminal differs from expected fields: {mismatches}",
+        )
+    return terminal
+
+
+def _callback_id(
+    task_name: str,
+    mission: str,
+    shortest_valid_route: str,
+    packet: TaskPacket,
+    *,
+    execution_profile: NativeTuraExecutionProfile | None = None,
+) -> str:
+    payload = {
+        "canonical_task_name": task_name,
+        "mission": mission,
+        "shortest_valid_route": shortest_valid_route,
+        "packet_id": packet.packet_id,
+        "parent_thread_id": packet.destination.thread_id,
+    }
+    if execution_profile is not None:
+        payload["execution_profile_sha256"] = execution_profile.profile_sha256
+    return "tura_callback_" + canonical_sha256(payload)
 
 
 def _task_directory_name(task_name: str) -> str:
@@ -1446,13 +1975,25 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def _canonical_json_bytes(value: object) -> bytes:
     return (
-        json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        )
         + "\n"
     ).encode("ascii")
 
 
 def _canonical_json_text(value: object) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
 
 
 def _render_jspace_policy(jspace_json: str) -> str:
@@ -1493,10 +2034,20 @@ def _build_parser() -> argparse.ArgumentParser:
     load.add_argument(
         "--format", choices=("dispatch", "json", "task"), default="task"
     )
+    prepare = subparsers.add_parser(
+        "prepare-dispatch",
+        help="compile a profile-bound capsule into official create_thread arguments",
+    )
+    prepare.add_argument("--task-name", required=True)
     install = subparsers.add_parser(
         "install-skill", help="install or verify the packaged Native Tura Skill"
     )
     install.add_argument("--codex-home", type=Path)
+    install.add_argument(
+        "--replace",
+        action="store_true",
+        help="atomically replace a different plain installed Skill",
+    )
     return parser
 
 
@@ -1512,8 +2063,14 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(capsule.render_task(), end="")
             return 0
+        if args.command == "prepare-dispatch":
+            capsule = load_native_tura_task_capsule(args.task_name, root=args.root)
+            print(json.dumps(prepare_native_tura_dispatch(capsule), sort_keys=True))
+            return 0
         if args.command == "install-skill":
-            receipt = install_native_tura_skill(codex_home=args.codex_home)
+            receipt = install_native_tura_skill(
+                codex_home=args.codex_home, replace=args.replace
+            )
             print(json.dumps(receipt, sort_keys=True))
             return 0
         raise AssertionError(f"unhandled command: {args.command}")

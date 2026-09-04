@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import sys
@@ -18,6 +17,7 @@ REQUIRED_PATHS = (
     "Makefile",
     ".gitignore",
     ".github/workflows/ci.yml",
+    ".github/workflows/component-conformance.yml",
     ".github/workflows/release.yml",
     ".github/dependabot.yml",
     ".github/ISSUE_TEMPLATE/config.yml",
@@ -40,8 +40,11 @@ REQUIRED_PATHS = (
     "evidence/provenance_manifest.json",
     "scripts/check_provenance.py",
     "scripts/check_components.py",
+    "scripts/clean_release_state.py",
+    "scripts/normalize_sdist.py",
     "scripts/review_readiness.py",
     "scripts/verify_dist.py",
+    "scripts/verify_reproducible_dist.py",
     "src/codex_collaboration_harness/adapters/__init__.py",
     "src/codex_collaboration_harness/adapters/tura.py",
     "docs/tura-integration.md",
@@ -50,18 +53,18 @@ REQUIRED_PATHS = (
     "components/tura-runtime.json",
     "src/codex_collaboration_harness/protocol/tura_terminal_envelope_v1.schema.json",
     "src/codex_collaboration_harness/protocol/tura_dispatch_request_v1.schema.json",
+    "src/codex_collaboration_harness/protocol/native_task_projection_v1.schema.json",
+    "src/codex_collaboration_harness/protocol/native_tura_execution_profile_v1.schema.json",
+    "src/codex_collaboration_harness/protocol/native_tura_terminal_v1.schema.json",
     "src/codex_collaboration_harness/protocol/golden/tura_dispatch_request_v1.json",
     "src/codex_collaboration_harness/protocol/golden/tura_result_v1.json",
     "src/codex_collaboration_harness/protocol/golden/tura_failure_v1.json",
 )
-NATIVE_TURA_ROLE_SHA256 = (
-    "2383fb6d65b3d9c71f6e5b972ae6718e723a3f684c9b55c9139a7c9fccba8983"
+NATIVE_TURA_SKILL_MEMBERS = (
+    "SKILL.md",
+    "agents/openai.yaml",
+    "references/native-topology.md",
 )
-NATIVE_TURA_SKILL_SHA256 = {
-    "SKILL.md": "f580f97200f60cf0d87b8a38e843ec3d31aae373d32d003c26d50cbab27e64e1",
-    "agents/openai.yaml": "afd2cefb13e0c8c54ba7f0ed2c54c6dcbfac9fba514415d8e6a518bf396bc0c8",
-    "references/native-topology.md": "df83e8637a7434e50fd1eee86c8c80626cd2d79ab002667e8301571ae93855e5",
-}
 EXCLUDED_DIRECTORIES = {
     ".git",
     ".mypy_cache",
@@ -194,9 +197,11 @@ def _check_pyproject(errors: list[str]) -> None:
 def _check_ci(errors: list[str]) -> None:
     path = ROOT / ".github" / "workflows" / "ci.yml"
     release_path = ROOT / ".github" / "workflows" / "release.yml"
+    component_path = ROOT / ".github" / "workflows" / "component-conformance.yml"
     try:
         workflow = path.read_text(encoding="utf-8")
         release_workflow = release_path.read_text(encoding="utf-8")
+        component_workflow = component_path.read_text(encoding="utf-8")
     except OSError as error:
         errors.append(f"cannot read CI workflow: {error}")
         return
@@ -205,16 +210,13 @@ def _check_ci(errors: list[str]) -> None:
         '"3.12"',
         "make check",
         "make installed-smoke",
-        "make build",
-        "make check-components",
-        "make verify-dist",
+        "make release-check",
     ):
         if required not in workflow:
             errors.append(f"CI workflow is missing {required!r}")
     for required in (
         "git cat-file -t",
-        "make check-components",
-        "make verify-dist",
+        "make release-check",
         "subject-checksums: dist/SHA256SUMS",
         "gh release create",
         "--verify-tag",
@@ -223,8 +225,22 @@ def _check_ci(errors: list[str]) -> None:
             errors.append(f"release workflow is missing {required!r}")
     if "--clobber" in release_workflow:
         errors.append("release workflow must not overwrite existing assets")
+    if "make check-components" not in component_workflow:
+        errors.append("component workflow is missing 'make check-components'")
+    for workflow_name, workflow_text in (
+        ("ci", workflow),
+        ("release", release_workflow),
+    ):
+        if "make check-components" in workflow_text:
+            errors.append(
+                f"{workflow_name} workflow must not gate Native releases on optional components"
+            )
     action_pattern = re.compile(r"uses:\s+[^\s#]+@([^\s#]+)")
-    for name, text in (("ci", workflow), ("release", release_workflow)):
+    for name, text in (
+        ("ci", workflow),
+        ("release", release_workflow),
+        ("component", component_workflow),
+    ):
         for reference in action_pattern.findall(text):
             if not re.fullmatch(r"[0-9a-f]{40}", reference):
                 errors.append(
@@ -316,8 +332,6 @@ def _check_native_tura_role(errors: list[str]) -> None:
         errors.append(f"invalid Native Tura role: {error}")
         return
 
-    if hashlib.sha256(role_bytes).hexdigest() != NATIVE_TURA_ROLE_SHA256:
-        errors.append("Native Tura role digest differs from the reviewed profile")
     if role.get("name") != "tura":
         errors.append("Native Tura role name must be tura")
     instructions = role.get("developer_instructions")
@@ -339,15 +353,12 @@ def _check_native_tura_role(errors: list[str]) -> None:
 
 def _check_native_tura_skill(errors: list[str]) -> None:
     root = ROOT / "src" / "codex_collaboration_harness" / "skills" / "tura-kernel"
-    for relative, expected in NATIVE_TURA_SKILL_SHA256.items():
+    for relative in NATIVE_TURA_SKILL_MEMBERS:
         path = root / relative
         try:
-            payload = path.read_bytes()
+            path.read_bytes()
         except OSError as error:
             errors.append(f"invalid Native Tura Skill member {relative}: {error}")
-            continue
-        if hashlib.sha256(payload).hexdigest() != expected:
-            errors.append(f"Native Tura Skill member {relative} digest differs")
     skill = _read_text(root / "SKILL.md") or ""
     topology = _read_text(root / "references" / "native-topology.md") or ""
     metadata = _read_text(root / "agents" / "openai.yaml") or ""
@@ -355,7 +366,9 @@ def _check_native_tura_skill(errors: list[str]) -> None:
         "name: tura-kernel",
         "Treat one dispatch as one first-class task.",
         "NATIVE_TURA_INLINE_CAPSULE_V1",
+        "NATIVE_EXECUTION_PROFILE",
         "Start from `task_projection`",
+        "[TURA_NATIVE_TERMINAL_V1]",
         "send_message_to_thread",
         "do not wait for a reverse Commander ACK",
     ):

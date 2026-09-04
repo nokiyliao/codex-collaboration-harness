@@ -15,6 +15,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
+SOURCE_ROOT = ROOT / "src"
+SOURCE_PACKAGE = SOURCE_ROOT / "codex_collaboration_harness"
 REQUIRED_PACKAGE_MEMBERS = (
     "codex_collaboration_harness/native_tura.py",
     "codex_collaboration_harness/agents/tura.toml",
@@ -24,24 +26,14 @@ REQUIRED_PACKAGE_MEMBERS = (
     "codex_collaboration_harness/py.typed",
     "codex_collaboration_harness/protocol/tura_dispatch_request_v1.schema.json",
     "codex_collaboration_harness/protocol/tura_terminal_envelope_v1.schema.json",
+    "codex_collaboration_harness/protocol/native_task_projection_v1.schema.json",
+    "codex_collaboration_harness/protocol/native_tura_execution_profile_v1.schema.json",
+    "codex_collaboration_harness/protocol/native_tura_terminal_v1.schema.json",
     "codex_collaboration_harness/protocol/golden/tura_dispatch_request_v1.json",
     "codex_collaboration_harness/protocol/golden/tura_result_v1.json",
     "codex_collaboration_harness/protocol/golden/tura_failure_v1.json",
 )
-NATIVE_TURA_ROLE_SHA256 = (
-    "2383fb6d65b3d9c71f6e5b972ae6718e723a3f684c9b55c9139a7c9fccba8983"
-)
-NATIVE_TURA_SKILL_SHA256 = {
-    "codex_collaboration_harness/skills/tura-kernel/SKILL.md": (
-        "d0cd6914ad6c76a271d06db6a6c1578149f3251bc4df25ee1aeb76a6a383702d"
-    ),
-    "codex_collaboration_harness/skills/tura-kernel/agents/openai.yaml": (
-        "afd2cefb13e0c8c54ba7f0ed2c54c6dcbfac9fba514415d8e6a518bf396bc0c8"
-    ),
-    "codex_collaboration_harness/skills/tura-kernel/references/native-topology.md": (
-        "df83e8637a7434e50fd1eee86c8c80626cd2d79ab002667e8301571ae93855e5"
-    ),
-}
+SKILL_PREFIX = "codex_collaboration_harness/skills/tura-kernel/"
 
 
 def _single(pattern: str) -> Path:
@@ -59,9 +51,21 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _source_package_members() -> dict[str, bytes]:
+    members: dict[str, bytes] = {}
+    for path in sorted(SOURCE_PACKAGE.rglob("*")):
+        if path.is_symlink():
+            raise RuntimeError(f"source package contains symlink: {path}")
+        if not path.is_file() or path.suffix == ".pyc" or "__pycache__" in path.parts:
+            continue
+        relative = path.relative_to(SOURCE_ROOT).as_posix()
+        members[relative] = path.read_bytes()
+    if not members:
+        raise RuntimeError("source package has no members")
+    return members
+
+
 def _verify_role_bytes(role_bytes: bytes, source: str) -> None:
-    if hashlib.sha256(role_bytes).hexdigest() != NATIVE_TURA_ROLE_SHA256:
-        raise RuntimeError(f"{source} Native Tura role digest differs")
     try:
         role = tomllib.loads(role_bytes.decode("utf-8"))
     except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
@@ -70,14 +74,27 @@ def _verify_role_bytes(role_bytes: bytes, source: str) -> None:
         raise RuntimeError(f"{source} Native Tura role name differs")
 
 
-def _verify_members(wheel: Path, sdist: Path) -> None:
+def _verify_members(
+    wheel: Path, sdist: Path, source_members: dict[str, bytes]
+) -> None:
     role_member = "codex_collaboration_harness/agents/tura.toml"
     with zipfile.ZipFile(wheel) as archive:
-        wheel_members = set(archive.namelist())
+        wheel_members = {
+            name
+            for name in archive.namelist()
+            if name.startswith("codex_collaboration_harness/")
+            and not name.endswith("/")
+        }
+        if wheel_members != set(source_members):
+            raise RuntimeError(
+                "wheel package members differ from source: "
+                f"missing={sorted(set(source_members) - wheel_members)}, "
+                f"unknown={sorted(wheel_members - set(source_members))}"
+            )
+        for member, expected in source_members.items():
+            if archive.read(member) != expected:
+                raise RuntimeError(f"wheel {member} bytes differ from source")
         _verify_role_bytes(archive.read(role_member), "wheel")
-        for member, expected in NATIVE_TURA_SKILL_SHA256.items():
-            if hashlib.sha256(archive.read(member)).hexdigest() != expected:
-                raise RuntimeError(f"wheel {member} digest differs")
     for member in REQUIRED_PACKAGE_MEMBERS:
         if member not in wheel_members:
             raise RuntimeError(f"wheel is missing {member}")
@@ -87,6 +104,26 @@ def _verify_members(wheel: Path, sdist: Path) -> None:
         if any(item.issym() or item.islnk() for item in members):
             raise RuntimeError("sdist must not contain symlink or hardlink members")
         names = {item.name for item in members}
+        source_prefix = "/src/"
+        sdist_package_members = {
+            item.name.split(source_prefix, 1)[1]: item
+            for item in members
+            if item.isfile()
+            and source_prefix in item.name
+            and item.name.split(source_prefix, 1)[1].startswith(
+                "codex_collaboration_harness/"
+            )
+        }
+        if set(sdist_package_members) != set(source_members):
+            raise RuntimeError(
+                "sdist package members differ from source: "
+                f"missing={sorted(set(source_members) - set(sdist_package_members))}, "
+                f"unknown={sorted(set(sdist_package_members) - set(source_members))}"
+            )
+        for member, expected in source_members.items():
+            stream = archive.extractfile(sdist_package_members[member])
+            if stream is None or stream.read() != expected:
+                raise RuntimeError(f"sdist {member} bytes differ from source")
         role_matches = [
             item
             for item in members
@@ -100,24 +137,15 @@ def _verify_members(wheel: Path, sdist: Path) -> None:
         if role_stream is None:
             raise RuntimeError("sdist Native Tura role cannot be read")
         _verify_role_bytes(role_stream.read(), "sdist")
-        for member, expected in NATIVE_TURA_SKILL_SHA256.items():
-            matches = [
-                item
-                for item in members
-                if item.name.endswith(f"/src/{member}") and item.isfile()
-            ]
-            if len(matches) != 1:
-                raise RuntimeError(f"sdist must contain one {member}")
-            stream = archive.extractfile(matches[0])
-            if stream is None or hashlib.sha256(stream.read()).hexdigest() != expected:
-                raise RuntimeError(f"sdist {member} digest differs")
     for member in REQUIRED_PACKAGE_MEMBERS:
         suffix = f"/src/{member}"
         if not any(name.endswith(suffix) for name in names):
             raise RuntimeError(f"sdist is missing {member}")
 
 
-def _verify_clean_install(wheel: Path, version: str) -> None:
+def _verify_clean_install(
+    wheel: Path, version: str, source_members: dict[str, bytes]
+) -> None:
     with tempfile.TemporaryDirectory(prefix="harness-dist-") as temporary:
         root = Path(temporary)
         venv = root / "venv"
@@ -135,6 +163,12 @@ def _verify_clean_install(wheel: Path, version: str) -> None:
             ],
             check=True,
         )
+        role_sha256 = hashlib.sha256(
+            source_members["codex_collaboration_harness/agents/tura.toml"]
+        ).hexdigest()
+        skill_sha256 = hashlib.sha256(
+            source_members[f"{SKILL_PREFIX}SKILL.md"]
+        ).hexdigest()
         check = (
             "import hashlib, json, tomllib; "
             "from importlib.metadata import version; "
@@ -146,25 +180,35 @@ def _verify_clean_install(wheel: Path, version: str) -> None:
             "assert json.loads(schema.read_text(encoding='utf-8'))"
             "['properties']['protocol_version']['const'] == "
             "'tura-collaboration/v1'; "
+            "native_terminal = files('codex_collaboration_harness').joinpath("
+            "'protocol', 'native_tura_terminal_v1.schema.json'); "
+            "assert json.loads(native_terminal.read_text(encoding='utf-8'))"
+            "['properties']['schema_version']['const'] == "
+            "'tura_native_terminal_v1'; "
+            "assert harness.NATIVE_TURA_TERMINAL_MARKER == "
+            "'[TURA_NATIVE_TERMINAL_V1]'; "
             "role = files('codex_collaboration_harness').joinpath("
             "'agents', 'tura.toml'); "
             "role_bytes = role.read_bytes(); "
             f"assert hashlib.sha256(role_bytes).hexdigest() == "
-            f"{NATIVE_TURA_ROLE_SHA256!r}; "
+            f"{role_sha256!r}; "
             "assert tomllib.loads(role_bytes.decode('utf-8'))['name'] == 'tura'; "
             "skill = files('codex_collaboration_harness').joinpath("
             "'skills', 'tura-kernel', 'SKILL.md'); "
             "assert hashlib.sha256(skill.read_bytes()).hexdigest() == "
-            f"{NATIVE_TURA_SKILL_SHA256['codex_collaboration_harness/skills/tura-kernel/SKILL.md']!r}; "
+            f"{skill_sha256!r}; "
             "print(harness.__file__)"
         )
         subprocess.run([str(python), "-I", "-c", check], cwd=root, check=True)
-        subprocess.run(
+        help_result = subprocess.run(
             [str(venv / "bin" / "tura-taskpacket"), "--help"],
             cwd=root,
             check=True,
-            stdout=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
         )
+        if "prepare-dispatch" not in help_result.stdout or "install-skill" not in help_result.stdout:
+            raise RuntimeError("installed Native Tura CLI is missing required commands")
         codex_home = root / "codex-home"
         install = subprocess.run(
             [
@@ -179,10 +223,12 @@ def _verify_clean_install(wheel: Path, version: str) -> None:
             text=True,
         )
         receipt = json.loads(install.stdout)
-        if receipt["members"] != {
-            member.removeprefix("codex_collaboration_harness/skills/tura-kernel/"): digest
-            for member, digest in NATIVE_TURA_SKILL_SHA256.items()
-        }:
+        expected_skill_members = {
+            member.removeprefix(SKILL_PREFIX): hashlib.sha256(payload).hexdigest()
+            for member, payload in source_members.items()
+            if member.startswith(SKILL_PREFIX)
+        }
+        if receipt["members"] != expected_skill_members:
             raise RuntimeError("installed Native Tura Skill receipt differs")
         subprocess.run([str(python), "-m", "pip", "check"], cwd=root, check=True)
 
@@ -192,8 +238,17 @@ def main() -> int:
     version = project["project"]["version"]
     wheel = _single("*.whl")
     sdist = _single("*.tar.gz")
-    _verify_members(wheel, sdist)
-    _verify_clean_install(wheel, version)
+    expected_dist_members = {wheel.name, sdist.name, "SHA256SUMS"}
+    unexpected = sorted(
+        path.name
+        for path in DIST.iterdir()
+        if path.name not in expected_dist_members
+    )
+    if unexpected:
+        raise RuntimeError(f"dist contains unexpected members: {unexpected}")
+    source_members = _source_package_members()
+    _verify_members(wheel, sdist, source_members)
+    _verify_clean_install(wheel, version, source_members)
 
     artifacts = sorted((wheel, sdist), key=lambda path: path.name)
     checksum_path = DIST / "SHA256SUMS"

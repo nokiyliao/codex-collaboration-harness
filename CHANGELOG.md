@@ -7,6 +7,8 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-09-05
+
 ### Fixed
 
 - Define Native callback success from the actual `CallToolResult` contract,
@@ -24,6 +26,17 @@ Versioning after the first public release.
 
 ### Added
 
+- Add a content-addressed Native execution profile that compiles exact model,
+  reasoning, and official `create_thread` target arguments without creating a
+  second dispatcher or lifecycle owner.
+- Add `tura-taskpacket prepare-dispatch` so a Commander can mechanically prepare
+  one first-class Native task from a verified profile-bound capsule.
+- Add a canonical `[TURA_NATIVE_TERMINAL_V1]` JSON callback envelope, parser,
+  and schema with exact callback, parent, and task identity checks.
+- Publish one shared task-projection schema and validator for bounded DCF/J-Space
+  context producers.
+- Add an explicit, rollback-preserving `install-skill --replace` adoption path
+  while keeping drift rejection as the default behavior.
 - Add a compact `tura-taskpacket load --format dispatch` view that invokes the
   Native Tura Skill with a pre-verified task projection and J-Space policy,
   avoiding an extra bootstrap tool turn and repeated evidence hashing.
@@ -40,6 +53,13 @@ Versioning after the first public release.
 
 ### Changed
 
+- Verify every source package member byte-for-byte in both wheel and sdist,
+  then repeat those checks after a clean isolated wheel install.
+- Remove stale reproducible packaging state and require two builds under the
+  same `SOURCE_DATE_EPOCH` to produce identical artifact digests, including a
+  content-preserving normalization of sdist ownership, timestamps, and order.
+- Move networked external-runtime lineage checks to a separate scheduled/manual
+  component-conformance workflow so they cannot block Native package releases.
 - Bind the packaged Native Tura role to the verified capsule bootstrap when a
   dynamic parent message is unavailable or unreadable.
 

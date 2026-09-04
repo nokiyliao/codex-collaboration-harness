@@ -21,9 +21,16 @@ from codex_collaboration_harness import (
 from codex_collaboration_harness.native_tura import (
     LEGACY_NATIVE_TURA_CAPSULE_VERSION,
     NATIVE_TURA_CAPSULE_VERSION,
+    NATIVE_TURA_TERMINAL_MARKER,
+    PROFILED_NATIVE_TURA_CAPSULE_VERSION,
+    NativeTuraExecutionProfile,
     NativeTuraPacketError,
+    NativeTuraTerminal,
+    canonical_task_projection,
     load_native_tura_task_capsule,
     main,
+    parse_native_tura_terminal_callback,
+    prepare_native_tura_dispatch,
     publish_native_tura_task_capsule,
 )
 
@@ -810,6 +817,223 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
             error = json.loads(stderr.getvalue())
             self.assertEqual(error["status"], "rejected")
             self.assertEqual(error["code"], "TASK_PACKET_NOT_FOUND")
+
+
+class NativeTuraDispatchContractTests(unittest.TestCase):
+    def test_profile_bound_capsule_prepares_exact_create_thread_request(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = NativeTuraExecutionProfile(
+                model="gpt-5.6-sol",
+                thinking="max",
+                target_type="project",
+                project_id="project.public-harness",
+                environment="worktree",
+            )
+            path = publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Run one profile-bound Native Tura task.",
+                shortest_valid_route="Use the official Native Codex task runtime.",
+                task_packet=make_packet(),
+                execution_profile=profile,
+                root=root,
+            )
+            loaded = load_native_tura_task_capsule(TASK_NAME, root=root)
+            plan = prepare_native_tura_dispatch(loaded)
+
+            self.assertEqual(
+                json.loads(path.read_text(encoding="ascii"))["schema_version"],
+                PROFILED_NATIVE_TURA_CAPSULE_VERSION,
+            )
+            self.assertEqual(loaded.execution_profile, profile)
+            self.assertEqual(plan, prepare_native_tura_dispatch(loaded))
+            self.assertEqual(plan["create_thread"]["model"], "gpt-5.6-sol")
+            self.assertEqual(plan["create_thread"]["thinking"], "max")
+            self.assertEqual(
+                plan["create_thread"]["target"],
+                {
+                    "type": "project",
+                    "projectId": "project.public-harness",
+                    "environment": {
+                        "type": "worktree",
+                        "startingState": {"type": "working-tree"},
+                    },
+                },
+            )
+            self.assertEqual(
+                hashlib.sha256(
+                    plan["create_thread"]["prompt"].encode("utf-8")
+                ).hexdigest(),
+                plan["prompt_sha256"],
+            )
+            self.assertEqual(
+                plan["terminal_contract"]["callback_id"], loaded.callback_id
+            )
+
+    def test_prepare_dispatch_cli_emits_the_same_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Run one CLI-prepared Native Tura task.",
+                shortest_valid_route="Use the official Native Codex task runtime.",
+                task_packet=make_packet(),
+                execution_profile=NativeTuraExecutionProfile(
+                    model="gpt-5.6-sol",
+                    directory_name="native-tura-cli-check",
+                ),
+                root=root,
+            )
+            expected = prepare_native_tura_dispatch(
+                load_native_tura_task_capsule(TASK_NAME, root=root)
+            )
+            output = StringIO()
+
+            with redirect_stdout(output):
+                exit_code = main(
+                    [
+                        "--root",
+                        str(root),
+                        "prepare-dispatch",
+                        "--task-name",
+                        TASK_NAME,
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(json.loads(output.getvalue()), expected)
+            self.assertEqual(
+                expected["create_thread"]["target"],
+                {"type": "projectless", "directoryName": "native-tura-cli-check"},
+            )
+
+    def test_execution_profile_is_part_of_callback_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            common = {
+                "canonical_task_name": TASK_NAME,
+                "mission": "Run one Native Tura task.",
+                "shortest_valid_route": "Use Native Codex.",
+                "task_packet": make_packet(),
+            }
+            publish_native_tura_task_capsule(
+                **common,
+                execution_profile=NativeTuraExecutionProfile(
+                    model="gpt-5.6-sol", thinking="max"
+                ),
+                root=root / "a",
+            )
+            publish_native_tura_task_capsule(
+                **common,
+                execution_profile=NativeTuraExecutionProfile(
+                    model="gpt-5.6-sol", thinking="high"
+                ),
+                root=root / "b",
+            )
+            first = load_native_tura_task_capsule(TASK_NAME, root=root / "a")
+            second = load_native_tura_task_capsule(TASK_NAME, root=root / "b")
+            self.assertNotEqual(first.callback_id, second.callback_id)
+
+    def test_ultra_reasoning_is_rejected_without_downgrade(self) -> None:
+        with self.assertRaisesRegex(
+            NativeTuraPacketError, "TURA_REASONING_EFFORT_UNSUPPORTED"
+        ):
+            NativeTuraExecutionProfile(model="gpt-5.6-sol", thinking="ultra")
+
+    def test_prepare_dispatch_rejects_legacy_unprofiled_capsule(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Run one legacy task.",
+                shortest_valid_route="Use Native Codex.",
+                task_packet=make_packet(),
+                root=temporary,
+            )
+            capsule = load_native_tura_task_capsule(TASK_NAME, root=temporary)
+            with self.assertRaisesRegex(
+                NativeTuraPacketError, "EXECUTION_PROFILE_MISSING"
+            ):
+                prepare_native_tura_dispatch(capsule)
+
+    def test_terminal_renderer_and_parser_enforce_exact_bindings(self) -> None:
+        terminal = NativeTuraTerminal(
+            callback_id="tura_callback_exact",
+            parent_thread_id="thread.parent",
+            task_thread_id="thread.task",
+            status="PREDICATE_ADVANCED",
+            mission="Close one predicate.",
+            predicate="callback_contract_is_machine_readable",
+            predicate_delta="false -> true",
+            evidence=({"sha256": "a" * 64},),
+            first_typed_blocker=None,
+            authority_effect="none",
+            protected_effect_count=0,
+        )
+
+        rendered = terminal.render()
+        parsed = parse_native_tura_terminal_callback(
+            rendered,
+            expected_callback_id="tura_callback_exact",
+            expected_parent_thread_id="thread.parent",
+            expected_task_thread_id="thread.task",
+        )
+
+        self.assertTrue(rendered.startswith(f"{NATIVE_TURA_TERMINAL_MARKER}\n"))
+        self.assertEqual(parsed, terminal)
+        self.assertEqual(parsed.payload_sha256, terminal.payload_sha256)
+        with self.assertRaisesRegex(
+            NativeTuraPacketError, "NATIVE_TERMINAL_IDENTITY_MISMATCH"
+        ):
+            parse_native_tura_terminal_callback(
+                rendered, expected_task_thread_id="thread.other"
+            )
+
+    def test_noncanonical_historical_callback_shapes_are_rejected(self) -> None:
+        for payload in (
+            "TURA_NATIVE_TERMINAL_CALLBACK status=PASS",
+            '{"status":"PASS"}',
+            "[TURA_NATIVE_TERMINAL_CALLBACK_V1]\n{}",
+        ):
+            with self.subTest(payload=payload), self.assertRaises(
+                NativeTuraPacketError
+            ):
+                parse_native_tura_terminal_callback(payload)
+
+    def test_blocked_terminal_requires_typed_blocker(self) -> None:
+        with self.assertRaisesRegex(
+            NativeTuraPacketError, "first_typed_blocker"
+        ):
+            NativeTuraTerminal(
+                callback_id="callback",
+                parent_thread_id="parent",
+                task_thread_id="task",
+                status="BLOCKED",
+                mission="mission",
+                predicate="predicate",
+                predicate_delta="none",
+                evidence=(),
+                first_typed_blocker=None,
+                authority_effect="none",
+                protected_effect_count=0,
+            )
+
+    def test_task_projection_has_one_public_canonical_validator(self) -> None:
+        projection = {
+            "schema_version": "example-producer/v1",
+            "task_id": "task.example",
+            "projection_kind": "read_only_context",
+            "target": "state:example",
+            "capability_ids": ["surface-map"],
+            "task_visible_pre_task_evidence_only": True,
+            "answer_key_used": False,
+            "data": {"state": "current"},
+        }
+        self.assertEqual(
+            canonical_task_projection(
+                projection, expected_task_id="task.example"
+            ),
+            _canonical_json(projection),
+        )
 
 
 if __name__ == "__main__":

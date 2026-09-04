@@ -38,6 +38,11 @@ silently downgrade it. Do not invent missing authority or infer
 task input from chat history, filenames, task titles, sibling tasks, or stale
 Tura state.
 
+New Commander-prepared tasks also carry `NATIVE_EXECUTION_PROFILE`. Require its
+profile digest, model, reasoning effort, and target to match the initial Native
+task metadata. A mismatch is `TURA_NATIVE_EXECUTION_PROFILE_MISMATCH`; do not
+repair it by changing model, effort, target, callback identity, or task.
+
 Treat one dispatch as one first-class task. After that task has terminalized or
 attempted its callback, do not reuse it for a new mission, shard, retry, or
 follow-up dispatch. The parent Commander creates a fresh Native task with a new
@@ -108,6 +113,10 @@ official Native Codex `send_message_to_thread` tool exactly once for the bound
 ```
 
 Populate effect fields with actual values rather than the example defaults.
+Send only the exact marker, one newline, and the JSON object. Do not prepend or
+append prose, rename fields, emit a key/value summary, or substitute a historical
+terminal marker. When the public package is available, its
+`NativeTuraTerminal.render()` method is the canonical renderer.
 The successful tool response is delivery confirmation and completes the Tura
 task; do not wait for a reverse Commander ACK. It proves that the callback
 message was accepted by the Native task tool, not that the parent provider turn
