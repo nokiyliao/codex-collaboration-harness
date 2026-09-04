@@ -42,7 +42,7 @@ artifacts under `dist/`.
 On 2026-09-04, the current source tree produced:
 
 - exact complete-cycle selector: `Ran 1 test` and `OK`;
-- full suite: `Ran 81 tests` and `OK`;
+- full suite: `Ran 82 tests` and `OK`;
 - review-readiness scan: 56 authored public files, passed;
 - evidence-manifest integrity: 1 covered artifact, passed;
 - synthetic demo and import smoke check: passed.
@@ -74,7 +74,7 @@ runtime.
 
 ## Invariant Matrix
 
-The current v0.3.0 candidate suite contains 81 tests. Its direct evidence is:
+The current v0.3.1 candidate suite contains 82 tests. Its direct evidence is:
 
 | Test area | Direct observation |
 |---|---|
@@ -114,10 +114,10 @@ The current v0.3.0 candidate suite contains 81 tests. Its direct evidence is:
 | Tura transport/terminal failure | Transport exceptions and explicit terminal failures become deterministic typed failures |
 | Tura identity closure | Packet, lease, request, and executor drift is rejected before becoming a core result |
 | Tura/core failure composition | Execution failures and typed rejections preserve the exact failure code, detail digest, and observed effect across the adapter-to-core boundary; a second execution is blocked until explicit `NONE` or `SETTLED` reconciliation |
-| Native Tura task bootstrap | A canonical Native task name resolves exactly one immutable capsule; TaskPacket, callback, content digest, file mode, link count, duplicate-key, tamper, traversal, and preimage-drift checks fail closed before execution |
+| Native Tura task bootstrap | A canonical Native task name resolves the unique highest immutable capsule revision; TaskPacket, callback, revision, content digest, file mode, link count, duplicate-key, tamper, traversal, stale-revision, and same-revision conflict checks fail closed before execution |
 
 The implementation has additional structural validation, and future paths may
-need new dedicated fixtures. Public evidence is limited to the 81 tests above
+need new dedicated fixtures. Public evidence is limited to the 82 tests above
 and the exact source under review.
 
 ## Reproduction Record

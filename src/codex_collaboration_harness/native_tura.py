@@ -24,6 +24,9 @@ from .core import Destination, TaskPacket, canonical_sha256, verify_identity
 NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v1"
 MAX_CAPSULE_BYTES = 512 * 1024
 _CANONICAL_TASK_NAME = re.compile(r"^/root(?:/[a-z0-9_]+)+$")
+_CAPSULE_FILENAME = re.compile(
+    r"^(?P<revision>[0-9]{20})-(?P<sha256>[0-9a-f]{64})\.json$"
+)
 _PACKET_KEYS = {
     "abandon_if",
     "destination",
@@ -165,18 +168,32 @@ def publish_native_tura_task_capsule(
     task_dir = packet_root / _task_directory_name(task_name)
     task_dir.mkdir(mode=0o700, exist_ok=True)
     _require_plain_directory(task_dir, packet_root)
-    target = task_dir / f"{capsule_sha256}.json"
+    target = task_dir / _capsule_filename(
+        task_packet.mission_revision, capsule_sha256
+    )
 
     existing = _capsule_files(task_dir)
-    if existing:
-        if len(existing) == 1 and existing[0] == target:
-            loaded = load_native_tura_task_capsule(task_name, root=packet_root)
+    same_revision = [
+        path
+        for path in existing
+        if _capsule_file_identity(path)[0] == task_packet.mission_revision
+    ]
+    if same_revision:
+        if len(same_revision) == 1 and same_revision[0] == target:
+            loaded = _load_capsule_path(target, task_name)
             if loaded.to_wire() == wire:
                 return target
         raise NativeTuraPacketError(
-            "TASK_PACKET_PREIMAGE_DRIFT",
-            f"canonical task {task_name!r} already has different input",
+            "TASK_PACKET_REVISION_CONFLICT",
+            f"canonical task {task_name!r} already has different revision input",
         )
+    if existing:
+        latest_revision = max(_capsule_file_identity(path)[0] for path in existing)
+        if task_packet.mission_revision < latest_revision:
+            raise NativeTuraPacketError(
+                "TASK_PACKET_REVISION_STALE",
+                f"revision {task_packet.mission_revision} is older than {latest_revision}",
+            )
 
     descriptor, temporary_name = tempfile.mkstemp(
         dir=task_dir, prefix=".capsule.", suffix=".tmp"
@@ -192,10 +209,10 @@ def publish_native_tura_task_capsule(
             os.link(temporary, target, follow_symlinks=False)
         except FileExistsError:
             temporary.unlink(missing_ok=True)
-            loaded = load_native_tura_task_capsule(task_name, root=packet_root)
+            loaded = _load_capsule_path(target, task_name)
             if loaded.to_wire() != wire:
                 raise NativeTuraPacketError(
-                    "TASK_PACKET_PREIMAGE_DRIFT",
+                    "TASK_PACKET_REVISION_CONFLICT",
                     f"canonical task {task_name!r} raced with different input",
                 ) from None
         _fsync_directory(task_dir)
@@ -225,12 +242,26 @@ def load_native_tura_task_capsule(
         )
     _require_plain_directory(task_dir, packet_root)
     files = _capsule_files(task_dir)
-    if len(files) != 1:
+    if not files:
         raise NativeTuraPacketError(
-            "TASK_PACKET_CARDINALITY_INVALID",
-            f"expected exactly one capsule for {task_name!r}, found {len(files)}",
+            "TASK_PACKET_NOT_FOUND", f"no capsule exists for {task_name!r}"
         )
-    path = files[0]
+    revisions: dict[int, list[Path]] = {}
+    for path in files:
+        revision, _ = _capsule_file_identity(path)
+        revisions.setdefault(revision, []).append(path)
+    conflicts = [revision for revision, paths in revisions.items() if len(paths) != 1]
+    if conflicts:
+        raise NativeTuraPacketError(
+            "TASK_PACKET_REVISION_CONFLICT",
+            f"multiple capsules exist for revisions {sorted(conflicts)}",
+        )
+    latest_revision = max(revisions)
+    return _load_capsule_path(revisions[latest_revision][0], task_name)
+
+
+def _load_capsule_path(path: Path, task_name: str) -> NativeTuraTaskCapsule:
+    revision, path_sha256 = _capsule_file_identity(path)
     if path.is_symlink() or not path.is_file():
         raise NativeTuraPacketError(
             "TASK_PACKET_MEMBER_INVALID", "capsule must be a regular non-symlink file"
@@ -264,6 +295,11 @@ def load_native_tura_task_capsule(
         )
 
     packet = _decode_task_packet(wire["task_packet"])
+    if packet.mission_revision != revision:
+        raise NativeTuraPacketError(
+            "TASK_CAPSULE_PATH_MISMATCH",
+            "capsule filename revision differs from its TaskPacket",
+        )
     mission = _require_text("mission", wire["mission"])
     route = _require_text("shortest_valid_route", wire["shortest_valid_route"])
     expected_callback = _callback_id(task_name, mission, route, packet)
@@ -277,7 +313,7 @@ def load_native_tura_task_capsule(
         raise NativeTuraPacketError(
             "TASK_CAPSULE_IDENTITY_MISMATCH", "capsule digest cannot be recomputed"
         )
-    if path.stem != expected_capsule_sha256:
+    if path_sha256 != expected_capsule_sha256:
         raise NativeTuraPacketError(
             "TASK_CAPSULE_PATH_MISMATCH", "capsule filename differs from its digest"
         )
@@ -405,9 +441,29 @@ def _task_directory_name(task_name: str) -> str:
     return "task-" + canonical_sha256({"canonical_task_name": task_name})
 
 
+def _capsule_filename(revision: int, capsule_sha256: str) -> str:
+    if revision < 0:
+        raise NativeTuraPacketError(
+            "TASK_PACKET_SHAPE_INVALID", "mission_revision must be non-negative"
+        )
+    return f"{revision:020d}-{capsule_sha256}.json"
+
+
+def _capsule_file_identity(path: Path) -> tuple[int, str]:
+    match = _CAPSULE_FILENAME.fullmatch(path.name)
+    if match is None:
+        raise NativeTuraPacketError(
+            "TASK_PACKET_DIRECTORY_MEMBERS_INVALID",
+            f"unexpected task packet member: {path.name!r}",
+        )
+    return int(match.group("revision")), match.group("sha256")
+
+
 def _capsule_files(task_dir: Path) -> list[Path]:
     members = sorted(task_dir.iterdir())
-    invalid = [path.name for path in members if path.suffix != ".json"]
+    invalid = [
+        path.name for path in members if _CAPSULE_FILENAME.fullmatch(path.name) is None
+    ]
     if invalid:
         raise NativeTuraPacketError(
             "TASK_PACKET_DIRECTORY_MEMBERS_INVALID",

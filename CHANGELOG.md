@@ -13,6 +13,8 @@ Versioning after the first public release.
   `tura-taskpacket` loader so a Native Codex child can recover its exact bounded
   task from its canonical task name without a Codex core patch or second
   lifecycle service.
+- Support monotonic immutable packet revisions for a resumed Native child;
+  loading selects the unique highest revision without a mutable current pointer.
 
 ### Changed
 

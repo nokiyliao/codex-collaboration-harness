@@ -117,7 +117,7 @@ source document does not create a self-referential claim about its own commit.
 
 ## Current Honest Disposition
 
-The public v0.3.0 candidate is designed for source, artifact, and component
+The public v0.3.1 candidate is designed for source, artifact, and component
 lineage review. Release status belongs to the exact Git tag and attached
 artifacts, not this document. A passing suite still does not establish installed
 Tura adoption, a live Codex integration, production durability, or OpenAI

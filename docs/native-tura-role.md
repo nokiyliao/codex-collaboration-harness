@@ -26,8 +26,10 @@ authority: the parent task packet and Native Codex tool boundary remain
 authoritative.
 
 When Native Codex cannot expose the dynamic parent message to the child, the
-parent publishes one content-addressed task capsule under the child's canonical
-task name. The dependency-free `tura-taskpacket` command verifies the capsule's
+parent publishes one content-addressed task capsule revision under the child's
+canonical task name. Follow-up turns add a higher immutable revision; no mutable
+current pointer is used. The dependency-free `tura-taskpacket` command selects
+the unique highest revision and verifies the capsule's
 TaskPacket identity, callback binding, digest filename, regular-file shape,
 mode, and link count before rendering the five decision fields. This is an
 immutable input bootstrap, not a second task database or dispatcher.
@@ -88,7 +90,8 @@ If the dynamic message is unreadable, the role instead runs exactly one:
 tura-taskpacket load --task-name /root/example_task --format task
 ```
 
-The task name is only a lookup key. The child must use the verified capsule
+The task name is only a lookup key. On each unreadable Native turn, the child
+loads the unique highest immutable revision and must use the verified capsule
 contents, including the exact parent thread and callback identity, and must not
 infer instructions from the name itself.
 

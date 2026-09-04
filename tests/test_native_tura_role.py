@@ -58,7 +58,7 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
             loaded = load_native_tura_task_capsule(TASK_NAME, root=root)
 
             self.assertEqual(loaded.task_packet, packet)
-            self.assertEqual(path.stem, loaded.capsule_sha256)
+            self.assertTrue(path.name.endswith(f"-{loaded.capsule_sha256}.json"))
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o444)
             self.assertEqual(path.stat().st_nlink, 1)
             rendered = loaded.render_task()
@@ -89,7 +89,7 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
             self.assertEqual(first, second)
 
             with self.assertRaisesRegex(
-                NativeTuraPacketError, "TASK_PACKET_PREIMAGE_DRIFT"
+                NativeTuraPacketError, "TASK_PACKET_REVISION_CONFLICT"
             ):
                 publish_native_tura_task_capsule(
                     **{**arguments, "mission": "A different mission."}
@@ -129,26 +129,29 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
                     root=temporary,
                 )
 
-    def test_same_task_name_cannot_acquire_a_second_packet_revision(self) -> None:
+    def test_same_task_name_loads_latest_immutable_packet_revision(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            publish_native_tura_task_capsule(
+            first = publish_native_tura_task_capsule(
                 canonical_task_name=TASK_NAME,
                 mission="Run one bounded Native Tura task.",
                 shortest_valid_route="Use Native Codex only.",
                 task_packet=make_packet(),
                 root=root,
             )
-            with self.assertRaisesRegex(
-                NativeTuraPacketError, "TASK_PACKET_PREIMAGE_DRIFT"
-            ):
-                publish_native_tura_task_capsule(
-                    canonical_task_name=TASK_NAME,
-                    mission="Run one bounded Native Tura task.",
-                    shortest_valid_route="Use Native Codex only.",
-                    task_packet=make_packet(revision=2),
-                    root=root,
-                )
+            second = publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Resume the same bounded Native Tura task.",
+                shortest_valid_route="Use the same Native child identity.",
+                task_packet=make_packet(revision=2),
+                root=root,
+            )
+
+            loaded = load_native_tura_task_capsule(TASK_NAME, root=root)
+
+            self.assertNotEqual(first, second)
+            self.assertEqual(loaded.task_packet.mission_revision, 2)
+            self.assertEqual(loaded.mission, "Resume the same bounded Native Tura task.")
 
     def test_mutable_or_linked_capsule_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -169,9 +172,30 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
             os.chmod(path, 0o444)
             os.link(path, path.with_suffix(".copy.json"))
             with self.assertRaisesRegex(
-                NativeTuraPacketError, "TASK_PACKET_CARDINALITY_INVALID"
+                NativeTuraPacketError, "TASK_PACKET_DIRECTORY_MEMBERS_INVALID"
             ):
                 load_native_tura_task_capsule(TASK_NAME, root=root)
+
+    def test_older_unseen_revision_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Resume the bounded Native Tura task.",
+                shortest_valid_route="Use Native Codex only.",
+                task_packet=make_packet(revision=2),
+                root=root,
+            )
+            with self.assertRaisesRegex(
+                NativeTuraPacketError, "TASK_PACKET_REVISION_STALE"
+            ):
+                publish_native_tura_task_capsule(
+                    canonical_task_name=TASK_NAME,
+                    mission="Stale task input.",
+                    shortest_valid_route="Do not run this stale route.",
+                    task_packet=make_packet(revision=1),
+                    root=root,
+                )
 
     def test_duplicate_json_key_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
