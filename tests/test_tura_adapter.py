@@ -20,6 +20,7 @@ from codex_collaboration_harness import (
     HarnessViolation,
     Mission,
     Route,
+    TaskContextBinding,
     TerminalStatus,
     canonical_sha256,
 )
@@ -40,7 +41,7 @@ from codex_collaboration_harness.adapters.tura import (
 EXECUTOR_ID = "executor.tura.public"
 
 
-def claimed_harness():
+def claimed_harness(task_context_binding: TaskContextBinding | None = None):
     mission = Mission(
         mission_id="mission.tura.synthetic",
         revision=1,
@@ -59,7 +60,7 @@ def claimed_harness():
         destination=Destination("coordinator.public", "thread.public"),
     )
     harness = CollaborationHarness()
-    packet = harness.plan(mission)
+    packet = harness.plan(mission, task_context_binding=task_context_binding)
     return harness, packet, harness.claim(packet)
 
 
@@ -95,6 +96,29 @@ def result_envelope(request, effect_state: EffectState) -> TuraTerminalEnvelope:
 
 
 class TuraAdapterConformanceTests(unittest.TestCase):
+    def test_context_bound_packet_requires_native_task_bootstrap(self) -> None:
+        binding = TaskContextBinding(
+            task_id="task.public",
+            artifact_root="/tmp/evidence",
+            context_path="contexts/task.public.json",
+            context_sha256="1" * 64,
+            jspace_path="jspace/task.public.json",
+            jspace_sha256="2" * 64,
+            dcf_generation_id="generation.public",
+            dcf_input_fingerprint="3" * 64,
+        )
+        _, packet, lease = claimed_harness(binding)
+        client = FakeTuraClient(
+            lambda request: result_envelope(request, EffectState.NONE)
+        )
+
+        outcome = TuraAdapter(client, EXECUTOR_ID).dispatch(packet, lease)
+
+        self.assertIsInstance(outcome, TuraTypedRejection)
+        self.assertEqual(outcome.code, FailureCode.STALE_IDENTITY)
+        self.assertEqual(outcome.mismatched_fields, ("packet_or_lease",))
+        self.assertEqual(client.requests, [])
+
     def test_native_tura_role_resource(self) -> None:
         role_bytes = (
             files("codex_collaboration_harness")
