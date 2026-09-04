@@ -140,16 +140,18 @@ tura-taskpacket inspect-packets
 The inventory separates current profile-bound packets from readable historical
 packets and exact rejected members. Historical digest-only v1 filenames remain
 readable, but they still fail `prepare-dispatch` because they have no execution
-profile.
+profile. Add `--summary` when only the counts, total, root, and full inventory
+digest are needed; this avoids carrying the per-packet rows into a callback turn.
 
 Capsules whose scopes are all explicitly prefixed with `read:` receive the
-`NATIVE_TURA_READ_ONLY_FAST_PATH_V1` execution marker. Those tasks batch their
-independent reads and proceed directly to the single terminal callback instead
-of spending extra provider turns rediscovering or self-validating the callback
-contract. The compiler embeds the exact two-line canonical terminal template so
-the worker cannot drift to a historical marker while source/test discovery is
-disabled. The fast-path command contract also avoids zsh special-parameter
-collisions and requires hidden-root-aware file enumeration.
+`NATIVE_TURA_READ_ONLY_FAST_PATH_V1` and
+`NATIVE_TURA_FAST_PATH_EXECUTION_V2` markers. Those tasks obtain
+`CODEX_THREAD_ID` in the same first batch as every task read, proceed directly
+to the single terminal callback, and emit only a fixed delivery acknowledgement
+after tool success. The compiler embeds the exact two-line canonical terminal
+template so the worker cannot drift to a historical marker while source/test
+discovery is disabled. The fast-path command contract also avoids zsh
+special-parameter collisions and requires hidden-root-aware file enumeration.
 The terminal marker plus canonical JSON is limited to 65,536 UTF-8 bytes and 32
 evidence items; large logs and artifacts travel as immutable references and
 digests rather than inline callback content.

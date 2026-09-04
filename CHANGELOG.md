@@ -7,6 +7,22 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-09-05
+
+### Added
+
+- Add `inspect-packets --summary` so a callback task can retain the exact full
+  inventory digest without carrying every packet row through another provider
+  turn.
+
+### Changed
+
+- Require read-only fast paths to obtain `CODEX_THREAD_ID` inside the first
+  task-read batch, forbid a later identity-only tool round, and return only a
+  fixed delivery acknowledgement after callback success.
+- Reduce the installed Tura Skill to its executable contract; detailed topology
+  remains lazy in the existing reference file.
+
 ## [0.3.6] - 2026-09-05
 
 ### Added

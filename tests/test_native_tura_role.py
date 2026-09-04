@@ -22,6 +22,7 @@ from codex_collaboration_harness.native_tura import (
     LEGACY_NATIVE_TURA_CAPSULE_VERSION,
     MAX_NATIVE_TERMINAL_BYTES,
     MAX_NATIVE_TERMINAL_EVIDENCE_ITEMS,
+    NATIVE_TURA_FAST_PATH_EXECUTION_MARKER,
     NATIVE_TURA_CAPSULE_VERSION,
     NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER,
     NATIVE_TURA_PACKET_INSPECTION_VERSION,
@@ -343,8 +344,17 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
             ).render_dispatch()
 
             self.assertIn(NATIVE_TURA_READ_ONLY_FAST_PATH_MARKER, dispatch)
+            self.assertIn(NATIVE_TURA_FAST_PATH_EXECUTION_MARKER, dispatch)
             self.assertIn("CODEX_THREAD_ID", dispatch)
-            self.assertNotIn("never assign its special parameters path, status", dispatch)
+            self.assertIn("task_id_only_followup=forbidden", dispatch)
+            self.assertIn("intermediate_commentary=forbidden", dispatch)
+            self.assertIn(
+                f"post_callback_final=DELIVERED {load_native_tura_task_capsule(TASK_NAME, root=root).callback_id}",
+                dispatch,
+            )
+            self.assertNotIn(
+                "never assign its special parameters path, status", dispatch
+            )
             self.assertNotIn("rg --files --hidden --no-ignore", dispatch)
             self.assertIn("NATIVE_TURA_CANONICAL_TERMINAL_TEMPLATE_V1", dispatch)
             self.assertEqual(dispatch.count(NATIVE_TURA_TERMINAL_MARKER), 1)
@@ -964,15 +974,32 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
                 for key, value in inspection.items()
                 if key != "inspection_sha256"
             }
-            self.assertEqual(
-                inspection["inspection_sha256"], canonical_sha256(payload)
-            )
+            self.assertEqual(inspection["inspection_sha256"], canonical_sha256(payload))
 
             output = StringIO()
             with redirect_stdout(output):
                 exit_code = main(["--root", str(root), "inspect-packets"])
             self.assertEqual(exit_code, 0)
             self.assertEqual(json.loads(output.getvalue()), inspection)
+
+            output = StringIO()
+            with redirect_stdout(output):
+                exit_code = main(["--root", str(root), "inspect-packets", "--summary"])
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(
+                json.loads(output.getvalue()),
+                {
+                    "schema_version": NATIVE_TURA_PACKET_INSPECTION_VERSION,
+                    "root": str(root.resolve()),
+                    "counts": {
+                        "CURRENT_PROFILED": 1,
+                        "LEGACY_READABLE": 1,
+                        "REJECTED": 1,
+                    },
+                    "total_packet_count": 3,
+                    "inspection_sha256": inspection["inspection_sha256"],
+                },
+            )
 
 
 class NativeTuraDispatchContractTests(unittest.TestCase):
@@ -1208,13 +1235,9 @@ class NativeTuraDispatchContractTests(unittest.TestCase):
 
         self.assertEqual(len(rendered.encode("utf-8")), MAX_NATIVE_TERMINAL_BYTES)
         self.assertEqual(parse_native_tura_terminal_callback(rendered), boundary)
-        with self.assertRaisesRegex(
-            NativeTuraPacketError, "NATIVE_TERMINAL_TOO_LARGE"
-        ):
+        with self.assertRaisesRegex(NativeTuraPacketError, "NATIVE_TERMINAL_TOO_LARGE"):
             NativeTuraTerminal(predicate_delta="x" * (padding + 2), **common)
-        with self.assertRaisesRegex(
-            NativeTuraPacketError, "NATIVE_TERMINAL_TOO_LARGE"
-        ):
+        with self.assertRaisesRegex(NativeTuraPacketError, "NATIVE_TERMINAL_TOO_LARGE"):
             parse_native_tura_terminal_callback(rendered + " ")
 
     def test_terminal_rejects_more_than_32_evidence_items(self) -> None:
@@ -1241,15 +1264,14 @@ class NativeTuraDispatchContractTests(unittest.TestCase):
             '{"status":"PASS"}',
             "[TURA_NATIVE_TERMINAL_CALLBACK_V1]\n{}",
         ):
-            with self.subTest(payload=payload), self.assertRaises(
-                NativeTuraPacketError
+            with (
+                self.subTest(payload=payload),
+                self.assertRaises(NativeTuraPacketError),
             ):
                 parse_native_tura_terminal_callback(payload)
 
     def test_blocked_terminal_requires_typed_blocker(self) -> None:
-        with self.assertRaisesRegex(
-            NativeTuraPacketError, "first_typed_blocker"
-        ):
+        with self.assertRaisesRegex(NativeTuraPacketError, "first_typed_blocker"):
             NativeTuraTerminal(
                 callback_id="callback",
                 parent_thread_id="parent",
@@ -1276,9 +1298,7 @@ class NativeTuraDispatchContractTests(unittest.TestCase):
             "data": {"state": "current"},
         }
         self.assertEqual(
-            canonical_task_projection(
-                projection, expected_task_id="task.example"
-            ),
+            canonical_task_projection(projection, expected_task_id="task.example"),
             _canonical_json(projection),
         )
 

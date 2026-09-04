@@ -139,15 +139,16 @@ Changing the execution profile changes the callback identity, preventing a task
 started with different model or target settings from reusing the old callback.
 
 When every declared scope starts with `read:`, the compiler also emits
-`NATIVE_TURA_READ_ONLY_FAST_PATH_V1`. The worker then performs one batched
-Native read stage, resolves its task ID directly from `CODEX_THREAD_ID`, and
-sends the canonical terminal without inspecting harness source/tests or doing a
-child-side render/parse loop. Callback identity and no-retry semantics remain
-unchanged; the parent still performs exact terminal intake. Static execution
-policy lives only in the versioned Skill; the prompt carries its version/digest,
-task-local fields, fast-path marker, and exact terminal template. This removes
-redundant provider turns from small verification tasks without weakening the
-general effecting-task contract. The compiler also embeds the exact two-line
+`NATIVE_TURA_READ_ONLY_FAST_PATH_V1` and
+`NATIVE_TURA_FAST_PATH_EXECUTION_V2`. The worker performs one batched Native
+read stage that includes `CODEX_THREAD_ID` plus every task read, then sends the
+canonical terminal without a later identity-only read, harness source/test
+inspection, or child-side render/parse loop. Callback identity and no-retry
+semantics remain unchanged; the parent still performs exact terminal intake.
+After callback success the task emits only `DELIVERED <callback_id>`. Static
+execution policy lives only in the versioned Skill; the prompt carries its
+version/digest, task-local fields, fast-path markers, and exact terminal
+template. The compiler also embeds the exact two-line
 `NATIVE_TURA_CANONICAL_TERMINAL_TEMPLATE_V1`, including the bound callback,
 parent, mission, predicate, and canonical marker; the worker fills only observed
 terminal fields. Its single read batch uses zsh-safe variable names and exact or
