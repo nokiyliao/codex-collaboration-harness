@@ -1,0 +1,105 @@
+---
+name: tura-kernel
+description: Run callback-critical or long-lived work as a first-class Native Codex task with Tura's objective-first execution policy. Use only when an operator or Commander explicitly dispatches work to Tura; do not use legacy Tura services or treat this as a general-purpose planning skill.
+---
+
+# Tura Kernel
+
+Run inside the current first-class Codex task. Codex remains the sole owner of
+the task/thread, session persistence, rollout, tools, provider turn, process
+lifecycle, and restart recovery. Tura supplies execution policy only.
+
+Read [references/native-topology.md](references/native-topology.md) when
+diagnosing ownership, callback delivery, or legacy-surface retirement.
+
+## Admit The Task
+
+Use the current task's persisted initial user message as the authoritative
+dispatch input. Require these fields before performing effects:
+
+- `MISSION`
+- `FIRST_FALSE_PREDICATE`
+- `SHORTEST_VALID_ROUTE`
+- `EXPECTED_PREDICATE_DELTA`
+- `ABANDON_IF`
+- `parent_thread_id`
+- `callback_id`
+
+Accept task-local scope, authority, evidence references, acceptance criteria,
+model, and service tier when supplied. Do not invent missing authority or infer
+task input from chat history, filenames, task titles, sibling tasks, or stale
+Tura state.
+
+Treat one dispatch as one first-class task. After that task has terminalized or
+attempted its callback, do not reuse it for a new mission, shard, retry, or
+follow-up dispatch. The parent Commander creates a fresh Native task with a new
+callback identity instead. This keeps Tura task identity independent from a
+completed provider response chain.
+
+When the dispatch explicitly supplies a Native Tura capsule task name, load it
+exactly once with `tura-taskpacket load --task-name <name> --format task` and
+verify that its parent and callback identities match the initial message. This
+loader is optional immutable-input validation, not a session store or runtime.
+
+## Execute
+
+Before each non-trivial action keep the five required decision fields current.
+Work on the first false predicate and give the selected route one bounded
+attempt. A long route may run for as long as it keeps producing predicate
+progress; do not impose an arbitrary wall-clock timeout.
+
+Reuse authoritative current state and Native Codex tools. Batch independent
+reads and deterministic command sets. Serialize dependent mutations. Keep
+effecting commands as top-level Native tool calls so Codex owns their durable
+receipts and interruption recovery.
+
+For independent semantic shards, ask the parent Commander to dispatch separate
+first-class Tura tasks. Do not use Native multi-agent children as an operational
+baseline: child packet visibility is a platform capability and must not be
+simulated with copied history, a bridge, or another runtime. Parallel Tura tasks
+remain independently persistent and each owns exactly one callback identity.
+Do not use another task merely to run several deterministic commands.
+
+Do not create or use a Tura Gateway, Router, Session DB, scheduler, lease store,
+callback queue, standalone App Server, raw App-tools pipe, or GUI proxy. Never
+write Codex private SQLite or rollout files. DCF and J-Space are optional
+read-only context/authority tools when the task requires them, not alternate
+lifecycle owners.
+
+## Deliver The Terminal
+
+Tura is an operator-trusted executor and thread writer. At terminal, call the
+official Native Codex `send_message_to_thread` tool exactly once for the bound
+`parent_thread_id`. Send a concise packet prefixed
+`[TURA_NATIVE_TERMINAL_V1]` with exactly these fields:
+
+```json
+{
+  "schema_version": "tura_native_terminal_v1",
+  "callback_id": "<bound callback identity>",
+  "parent_thread_id": "<bound parent>",
+  "task_thread_id": "<current Codex task id>",
+  "status": "PREDICATE_ADVANCED | MISSION_COMPLETE | BLOCKED",
+  "mission": "<mission>",
+  "predicate": "<first false predicate worked>",
+  "predicate_delta": "<actual state change or none>",
+  "evidence": [],
+  "first_typed_blocker": null,
+  "authority_effect": "none",
+  "protected_effect_count": 0
+}
+```
+
+Populate effect fields with actual values rather than the example defaults.
+The successful tool response is delivery confirmation and completes the Tura
+task; do not wait for a reverse Commander ACK. It proves that the callback
+message was accepted by the Native task tool, not that the parent provider turn
+or parent mission acceptance completed. If the parent later encounters a Native
+continuation failure, preserve the delivered callback and intake it on a later
+Commander turn; never resend the callback. If delivery is uncertain, do not
+retry. Finish locally with `CALLBACK_DELIVERY_UNSETTLED`, the payload digest,
+and the exact uncertain attempt so Commander can reconcile it from Native task
+history.
+
+The child task's final response is fallback evidence only. Mission convergence
+belongs to the parent Commander after callback intake.

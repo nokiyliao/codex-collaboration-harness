@@ -2,11 +2,34 @@
 
 ## End-State Contract
 
-The preferred Tura integration is a thin Native Codex agent role. Native Codex
-is the sole owner of session and task persistence, child lifecycle, tools,
-effects, interruption, terminal state, and direct-parent callback. Tura adds
-only the execution policy needed to keep one mission on its first false
-predicate and to abandon an unproductive route after one bounded attempt.
+The preferred Tura integration is an explicitly invoked `$tura-kernel` Skill in
+a first-class Native Codex task created by the parent Commander. Native Codex is
+the sole owner of session and task persistence, tools, effects, provider turns,
+interruption, and terminal state. Tura adds only the execution policy needed to
+keep one mission on its first false predicate and returns one official
+`send_message_to_thread` callback.
+
+The canonical Skill resources are packaged at:
+
+```text
+codex_collaboration_harness/skills/tura-kernel/SKILL.md
+codex_collaboration_harness/skills/tura-kernel/agents/openai.yaml
+codex_collaboration_harness/skills/tura-kernel/references/native-topology.md
+```
+
+Install or verify those exact packaged bytes with:
+
+```bash
+tura-taskpacket install-skill
+```
+
+The command installs under `$CODEX_HOME/skills/tura-kernel` (defaulting to
+`~/.codex/skills/tura-kernel`). An identical target is a no-op; an existing
+different target fails with `SKILL_TARGET_PREIMAGE_DRIFT` and is not overwritten.
+
+The packaged `agents/tura.toml` resource remains available for compatibility
+with Native runtimes that expose named agent roles. It is not the first-class
+task dispatch baseline used by this profile.
 
 The canonical resource is packaged at:
 
@@ -34,7 +57,7 @@ TaskPacket identity, callback binding, digest filename, regular-file shape,
 mode, and link count before rendering the five decision fields. This is an
 immutable input bootstrap, not a second task database or dispatcher.
 
-## Drift-Safe Installation
+## Compatibility Role Installation
 
 The following installs the exact packaged bytes into the standard Codex agent
 directory. An identical target is a no-op; a different existing target fails
@@ -73,8 +96,8 @@ PY
 
 ## Native Dispatch
 
-A parent selects the `tura` agent role explicitly and sends a bounded task with
-the five decision fields:
+A parent uses official `create_thread` and explicitly invokes `$tura-kernel` in
+the initial prompt together with the five decision fields:
 
 ```text
 MISSION
@@ -84,7 +107,7 @@ EXPECTED_PREDICATE_DELTA
 ABANDON_IF
 ```
 
-If the dynamic message is unreadable, the role instead runs exactly one:
+If the task uses an immutable capsule binding, the Skill runs exactly one:
 
 ```bash
 tura-taskpacket load --task-name /root/example_task --format task
@@ -95,15 +118,15 @@ loads the unique highest immutable revision and must use the verified capsule
 contents, including the exact parent thread and callback identity, and must not
 infer instructions from the name itself.
 
-The child uses the same Native Codex persistence and tools as other Codex
-children. Its terminal response returns over the same direct-parent callback.
-No external Tura request or terminal-envelope transport participates in this
-profile.
+The task uses Native Codex persistence and tools. At terminal it performs one
+official `send_message_to_thread` call to the bound parent. No external Tura
+request, Session DB, Gateway, Router, or terminal-envelope transport
+participates in this profile.
 
-Deployment acceptance should prove the role is readable from the installed
-package, the installed target digest matches the reviewed resource, a fresh
-`tura` child returns to its direct parent, and that callback still works while
-the optional external Tura services are unavailable.
+Deployment acceptance should prove the Skill is readable from the installed
+package, the installed target digests match the reviewed resources, a fresh
+first-class task can explicitly load `$tura-kernel`, and its callback works
+while optional external Tura services are unavailable.
 
 ## External Compatibility Profile
 

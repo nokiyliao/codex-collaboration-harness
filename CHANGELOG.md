@@ -9,6 +9,10 @@ Versioning after the first public release.
 
 ### Added
 
+- Package the source-authoritative `$tura-kernel` Skill, metadata, and Native
+  topology, plus an atomic `tura-taskpacket install-skill` parity installer.
+- Verify exact Skill member identities in source tests, public readiness,
+  wheel/sdist inspection, and clean-install smoke coverage.
 - Add a content-addressed Native Tura task capsule and dependency-free
   `tura-taskpacket` loader so a Native Codex child can recover its exact bounded
   task from its canonical task name without a Codex core patch or second

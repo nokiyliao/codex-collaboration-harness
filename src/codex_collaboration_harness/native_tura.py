@@ -12,10 +12,12 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import stat
 import sys
 import tempfile
 from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +33,12 @@ from .core import (
 LEGACY_NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v1"
 NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v2"
 MAX_CAPSULE_BYTES = 512 * 1024
+NATIVE_TURA_SKILL_NAME = "tura-kernel"
+NATIVE_TURA_SKILL_MEMBERS = (
+    "SKILL.md",
+    "agents/openai.yaml",
+    "references/native-topology.md",
+)
 _CANONICAL_TASK_NAME = re.compile(r"^/root(?:/[a-z0-9_]+)+$")
 _TASK_PROJECTION_SCHEMA = re.compile(r"^[a-z0-9][a-z0-9._-]*/v1$")
 _CAPSULE_FILENAME = re.compile(
@@ -245,6 +253,114 @@ class NativeTuraTaskCapsule:
 def default_native_tura_packet_root() -> Path:
     codex_home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
     return codex_home / "tura-kernel" / "packets"
+
+
+def install_native_tura_skill(
+    *, codex_home: str | os.PathLike[str] | None = None
+) -> dict[str, Any]:
+    """Install the packaged Skill atomically, or verify an identical target."""
+
+    payloads = _native_tura_skill_payloads()
+    home = (
+        Path(codex_home)
+        if codex_home is not None
+        else Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+    )
+    skill_parent = home / "skills"
+    target = skill_parent / NATIVE_TURA_SKILL_NAME
+    skill_parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    if skill_parent.is_symlink() or not skill_parent.is_dir():
+        raise NativeTuraPacketError(
+            "SKILL_INSTALL_ROOT_INVALID", "Codex skills root must be a plain directory"
+        )
+
+    if target.exists() or target.is_symlink():
+        _verify_native_tura_skill_target(target, payloads)
+        status = "unchanged"
+    else:
+        staging = Path(
+            tempfile.mkdtemp(prefix=f".{NATIVE_TURA_SKILL_NAME}.", dir=skill_parent)
+        )
+        try:
+            for relative, payload in payloads.items():
+                destination = staging / relative
+                destination.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+                with destination.open("xb") as stream:
+                    stream.write(payload)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.chmod(destination, 0o644)
+            os.chmod(staging, 0o755)
+            try:
+                os.rename(staging, target)
+            except OSError as error:
+                if not (target.exists() or target.is_symlink()):
+                    raise NativeTuraPacketError(
+                        "SKILL_INSTALL_FAILED", str(error)
+                    ) from error
+                _verify_native_tura_skill_target(target, payloads)
+            _fsync_directory(skill_parent)
+        finally:
+            if staging.exists():
+                shutil.rmtree(staging)
+        _verify_native_tura_skill_target(target, payloads)
+        status = "installed"
+
+    return {
+        "status": status,
+        "skill": NATIVE_TURA_SKILL_NAME,
+        "target": str(target),
+        "members": {
+            relative: hashlib.sha256(payload).hexdigest()
+            for relative, payload in sorted(payloads.items())
+        },
+    }
+
+
+def _native_tura_skill_payloads() -> dict[str, bytes]:
+    root = files("codex_collaboration_harness").joinpath(
+        "skills", NATIVE_TURA_SKILL_NAME
+    )
+    payloads: dict[str, bytes] = {}
+    try:
+        for relative in NATIVE_TURA_SKILL_MEMBERS:
+            payloads[relative] = root.joinpath(*relative.split("/")).read_bytes()
+    except (FileNotFoundError, OSError) as error:
+        raise NativeTuraPacketError(
+            "SKILL_PACKAGE_MEMBER_MISSING", str(error)
+        ) from error
+    return payloads
+
+
+def _verify_native_tura_skill_target(
+    target: Path, payloads: dict[str, bytes]
+) -> None:
+    if target.is_symlink() or not target.is_dir():
+        raise NativeTuraPacketError(
+            "SKILL_TARGET_PREIMAGE_DRIFT", "installed Skill root must be a plain directory"
+        )
+    entries = list(target.rglob("*"))
+    if any(entry.is_symlink() for entry in entries):
+        raise NativeTuraPacketError(
+            "SKILL_TARGET_PREIMAGE_DRIFT", "installed Skill contains a symlink"
+        )
+    actual_files = {
+        entry.relative_to(target).as_posix()
+        for entry in entries
+        if entry.is_file()
+    }
+    if actual_files != set(payloads):
+        raise NativeTuraPacketError(
+            "SKILL_TARGET_PREIMAGE_DRIFT",
+            f"installed Skill members differ: {sorted(actual_files)}",
+        )
+    for relative, payload in payloads.items():
+        path = target / relative
+        if not path.is_file() or path.read_bytes() != payload:
+            raise NativeTuraPacketError(
+                "SKILL_TARGET_PREIMAGE_DRIFT",
+                f"installed Skill member differs: {relative}",
+            )
 
 
 def publish_native_tura_task_capsule(
@@ -1315,6 +1431,10 @@ def _build_parser() -> argparse.ArgumentParser:
     load = subparsers.add_parser("load", help="load one task-bound capsule")
     load.add_argument("--task-name", required=True)
     load.add_argument("--format", choices=("json", "task"), default="task")
+    install = subparsers.add_parser(
+        "install-skill", help="install or verify the packaged Native Tura Skill"
+    )
+    install.add_argument("--codex-home", type=Path)
     return parser
 
 
@@ -1327,6 +1447,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(capsule.to_wire(), sort_keys=True))
             else:
                 print(capsule.render_task(), end="")
+            return 0
+        if args.command == "install-skill":
+            receipt = install_native_tura_skill(codex_home=args.codex_home)
+            print(json.dumps(receipt, sort_keys=True))
             return 0
         raise AssertionError(f"unhandled command: {args.command}")
     except NativeTuraPacketError as error:

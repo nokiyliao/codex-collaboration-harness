@@ -21,13 +21,16 @@ It is intentionally an in-memory reference, not an agent runtime, workflow
 service, sandbox, durable queue, or authorization system. Integrators provide
 the actual worker, persistence, effect, and callback adapters.
 
-The preferred Codex deployment profile packages Tura as a thin native agent
-role. Native Codex remains the sole owner of task persistence, child lifecycle,
-tools, and direct-parent callback; the role contributes only bounded execution
-policy. The exact installable role is
-[`agents/tura.toml`](src/codex_collaboration_harness/agents/tura.toml), with the
-topology and drift-safe installation procedure documented in
-[`docs/native-tura-role.md`](docs/native-tura-role.md).
+The preferred Codex deployment profile packages Tura as the explicitly invoked
+[`$tura-kernel` Skill](src/codex_collaboration_harness/skills/tura-kernel/SKILL.md).
+The parent creates a first-class Native Codex task; Native Codex remains the sole
+owner of task persistence, tools, provider turns, and restart recovery, while
+the Skill contributes bounded execution policy and returns one official
+`send_message_to_thread` callback. The older
+[`agents/tura.toml`](src/codex_collaboration_harness/agents/tura.toml) remains a
+compatibility resource rather than the operational dispatch baseline. See
+[`docs/native-tura-role.md`](docs/native-tura-role.md) for the topology and
+drift-safe installation procedure.
 
 The package also retains an optional, transport-neutral
 [`TuraAdapter`](src/codex_collaboration_harness/adapters/tura.py). It turns the
@@ -107,8 +110,9 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
 There is no runtime daemon or lifecycle service in the reference package. The
-only CLI, `tura-taskpacket`, verifies and renders an immutable Native Tura task
-capsule; it does not create sessions, dispatch workers, or write callbacks.
+only CLI, `tura-taskpacket`, installs or verifies the packaged Skill and renders
+an immutable Native Tura task capsule; it does not create sessions, dispatch
+workers, or write callbacks.
 Start with the public objects exported by `codex_collaboration_harness`; see
 [`docs/verification.md`](docs/verification.md) for the exact verification
 contract and [`docs/architecture.md`](docs/architecture.md) for the lifecycle.

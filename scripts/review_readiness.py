@@ -28,6 +28,9 @@ REQUIRED_PATHS = (
     "src/codex_collaboration_harness/core.py",
     "src/codex_collaboration_harness/native_tura.py",
     "src/codex_collaboration_harness/agents/tura.toml",
+    "src/codex_collaboration_harness/skills/tura-kernel/SKILL.md",
+    "src/codex_collaboration_harness/skills/tura-kernel/agents/openai.yaml",
+    "src/codex_collaboration_harness/skills/tura-kernel/references/native-topology.md",
     "src/codex_collaboration_harness/py.typed",
     "tests/test_harness.py",
     "tests/test_tura_adapter.py",
@@ -54,6 +57,11 @@ REQUIRED_PATHS = (
 NATIVE_TURA_ROLE_SHA256 = (
     "2383fb6d65b3d9c71f6e5b972ae6718e723a3f684c9b55c9139a7c9fccba8983"
 )
+NATIVE_TURA_SKILL_SHA256 = {
+    "SKILL.md": "21dc5ea6fb2a9bfb50236b932af67831c1714f261a0349896c1d4cde7127d353",
+    "agents/openai.yaml": "3681a7529082e001b6d27983054eeb4cabafdbe26d6ffbe317ec384a4b9f56c2",
+    "references/native-topology.md": "df83e8637a7434e50fd1eee86c8c80626cd2d79ab002667e8301571ae93855e5",
+}
 EXCLUDED_DIRECTORIES = {
     ".git",
     ".mypy_cache",
@@ -329,6 +337,34 @@ def _check_native_tura_role(errors: list[str]) -> None:
             errors.append(f"Native Tura role is missing {required!r}")
 
 
+def _check_native_tura_skill(errors: list[str]) -> None:
+    root = ROOT / "src" / "codex_collaboration_harness" / "skills" / "tura-kernel"
+    for relative, expected in NATIVE_TURA_SKILL_SHA256.items():
+        path = root / relative
+        try:
+            payload = path.read_bytes()
+        except OSError as error:
+            errors.append(f"invalid Native Tura Skill member {relative}: {error}")
+            continue
+        if hashlib.sha256(payload).hexdigest() != expected:
+            errors.append(f"Native Tura Skill member {relative} digest differs")
+    skill = _read_text(root / "SKILL.md") or ""
+    topology = _read_text(root / "references" / "native-topology.md") or ""
+    metadata = _read_text(root / "agents" / "openai.yaml") or ""
+    for required in (
+        "name: tura-kernel",
+        "Treat one dispatch as one first-class task.",
+        "send_message_to_thread",
+        "do not wait for a reverse Commander ACK",
+    ):
+        if required not in skill:
+            errors.append(f"Native Tura Skill is missing {required!r}")
+    if "Official Codex Desktop/App Server" not in topology:
+        errors.append("Native Tura topology is missing the sole-owner boundary")
+    if 'allow_implicit_invocation: false' not in metadata:
+        errors.append("Native Tura Skill must require explicit invocation")
+
+
 def _check_public_content(errors: list[str]) -> None:
     for path in _iter_public_files():
         text = _read_text(path)
@@ -366,6 +402,7 @@ def main() -> int:
     _check_benchmark_label(errors)
     _check_tura_component(errors)
     _check_native_tura_role(errors)
+    _check_native_tura_skill(errors)
     _check_public_content(errors)
 
     if errors:
