@@ -434,6 +434,52 @@ class MissionSupersessionDisposition:
 
 
 @dataclass(frozen=True, slots=True)
+class TaskContextBinding:
+    """Content-addressed task-local context and its J-Space authority contract."""
+
+    task_id: str
+    artifact_root: str
+    context_path: str
+    context_sha256: str
+    jspace_path: str
+    jspace_sha256: str
+    dcf_generation_id: str
+    dcf_input_fingerprint: str
+
+    def __post_init__(self) -> None:
+        for name in (
+            "task_id",
+            "artifact_root",
+            "context_path",
+            "jspace_path",
+            "dcf_generation_id",
+        ):
+            _require_text(name, getattr(self, name))
+        for name in (
+            "context_sha256",
+            "jspace_sha256",
+            "dcf_input_fingerprint",
+        ):
+            value = getattr(self, name)
+            _require_text(name, value)
+            if len(value) != 64 or any(
+                character not in "0123456789abcdef" for character in value
+            ):
+                raise ValueError(f"{name} must be a lowercase SHA-256 digest")
+
+
+def _task_packet_identity_payload(packet: "TaskPacket") -> dict[str, Any]:
+    payload = {
+        item.name: getattr(packet, item.name)
+        for item in fields(packet)
+        if item.name not in {"packet_id", "task_context_binding"}
+    }
+    if packet.task_context_binding is not None:
+        payload["task_context_binding"] = packet.task_context_binding
+    return payload
+
+
+@dataclass(frozen=True, slots=True)
 class TaskPacket:
     """Content-addressed decision and bounded dispatch packet."""
 
@@ -449,6 +495,7 @@ class TaskPacket:
     abandon_if: str
     recovery_budget: int
     destination: Destination
+    task_context_binding: TaskContextBinding | None = None
     packet_id: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -457,12 +504,15 @@ class TaskPacket:
         if self.recovery_budget < 0:
             raise ValueError("recovery_budget must be non-negative")
         _require_scope_version_ints("scope_versions", self.scope_versions)
-        payload = {
-            item.name: getattr(self, item.name)
-            for item in fields(self)
-            if item.name != "packet_id"
-        }
-        object.__setattr__(self, "packet_id", _stable_id("packet", payload))
+        if self.task_context_binding is not None and not isinstance(
+            self.task_context_binding, TaskContextBinding
+        ):
+            raise TypeError("task_context_binding must be TaskContextBinding or None")
+        object.__setattr__(
+            self,
+            "packet_id",
+            _stable_id("packet", _task_packet_identity_payload(self)),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1130,12 +1180,9 @@ def verify_identity(record: object) -> bool:
     """Recompute a supported content-addressed record from persisted fields."""
 
     if isinstance(record, TaskPacket):
-        payload = {
-            item.name: getattr(record, item.name)
-            for item in fields(record)
-            if item.name != "packet_id"
-        }
-        return record.packet_id == _stable_id("packet", payload)
+        return record.packet_id == _stable_id(
+            "packet", _task_packet_identity_payload(record)
+        )
     if isinstance(record, Lease):
         payload = {
             "packet_id": record.packet_id,
@@ -2662,7 +2709,12 @@ class CollaborationHarness:
     def __init__(self, store: InMemoryStore | None = None) -> None:
         self.store = store if store is not None else InMemoryStore()
 
-    def plan(self, mission: Mission) -> TaskPacket:
+    def plan(
+        self,
+        mission: Mission,
+        *,
+        task_context_binding: TaskContextBinding | None = None,
+    ) -> TaskPacket:
         self.store.register_mission(mission)
         predicate = self.store.first_false(mission)
         if predicate is None:
@@ -2700,6 +2752,7 @@ class CollaborationHarness:
             abandon_if=route.abandon_if,
             recovery_budget=route.recovery_budget,
             destination=mission.destination,
+            task_context_binding=task_context_binding,
         )
 
     def dispose_route(self, disposition: RouteDisposition) -> RouteDisposition:

@@ -7,9 +7,9 @@ The lowest-cost deployment uses Native Codex as the only runtime owner:
 ```text
 parent mission / ordered predicates
   -> Native Codex task persistence and lifecycle
-  -> packaged thin Tura agent role
+  -> packaged thin Tura Skill + target-bound dispatch policy
   -> native tools and effects
-  -> native direct-parent callback
+  -> strict native direct-parent callback
   -> parent mission verification
 ```
 
@@ -43,7 +43,7 @@ the earlier runtime engineering inspectable to third parties.
 |---|---|---|---|
 | Collaboration core | Mission, first-false routing, lease/CAS, terminal receipt, continuation, ACK, parent readback | MIT | `src/codex_collaboration_harness/core.py`, synthetic tests |
 | Tura integration kit | Stable request/envelope mapping and fail-closed adapter behavior | MIT | `src/codex_collaboration_harness/adapters/tura.py`, conformance tests |
-| Native Tura role | Bounded execution policy; Native Codex retains persistence, lifecycle, tools, and callback | MIT | `agents/tura.toml`, resource and distribution tests |
+| Native Tura role | Bounded execution policy; Native Codex retains persistence, lifecycle, tools, and callback transport | MIT | `skills/tura-kernel`, execution-profile and terminal schemas, resource and distribution tests |
 | Modified Tura runtime | Optional external/legacy profile for Gateway, Router, runtime/session lifecycle, commands, receipts, recovery, callback and provider execution | AGPL-3.0-or-later | Public fork and exact `components/tura-runtime.json` identities |
 | Internal benchmark projection | Motivation and bounded aggregate engineering observations | Evidence only | Sanitized JSON, integrity manifest, explicit non-causal limitations |
 

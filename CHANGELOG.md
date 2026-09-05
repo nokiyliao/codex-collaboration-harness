@@ -7,6 +7,154 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-09-05
+
+### Changed
+
+- Integrate the published v0.2.2 release ancestry with the accepted Native Tura
+  lineage without changing source or test bytes. Preserve the original v0.2.2
+  correctness-fix history below; release artifacts are rebuilt from this lineage.
+- Reference the existing TaskPacket mission ID in read-only terminal templates
+  instead of duplicating the full task instructions. The task body preserves
+  the exact instructions, while capsule and callback identities and historical
+  terminal decoding remain unchanged.
+
+## [0.3.9] - 2026-09-05
+
+### Added
+
+- Add execution-profile v2 with `inherit`, `preferred`, and `pinned` model
+  selection policies. Ordinary tasks can inherit Native Codex settings or
+  request an initial model without invalidating later model changes; exact pins
+  remain available for benchmarks and reproductions.
+- Version the conditional `create_thread` argument shape as dispatch-plan v4.
+- Preserve read compatibility for historical v1 profiles as exact pinned
+  profiles.
+
+## [0.3.8] - 2026-09-05
+
+### Changed
+
+- Make the read-only fast-path dispatch contract self-contained and explicitly
+  forbid a redundant Skill-file read. This trades a few hundred deterministic
+  prompt bytes for removal of an entire Native tool continuation; the rule is
+  limited to the read-only fast path and leaves long-task Skill policy lazy.
+
+## [0.3.7] - 2026-09-05
+
+### Added
+
+- Add `inspect-packets --summary` so a callback task can retain the exact full
+  inventory digest without carrying every packet row through another provider
+  turn.
+
+### Changed
+
+- Require read-only fast paths to obtain `CODEX_THREAD_ID` inside the first
+  task-read batch, forbid a later identity-only tool round, and return only a
+  fixed delivery acknowledgement after callback success.
+- Reduce the installed Tura Skill to its executable contract; detailed topology
+  remains lazy in the existing reference file.
+
+## [0.3.6] - 2026-09-05
+
+### Added
+
+- Add read-only `tura-taskpacket inspect-packets` inventory with deterministic
+  `CURRENT_PROFILED`, `LEGACY_READABLE`, and `REJECTED` classifications.
+- Report exact dispatch, task-projection, J-Space-policy UTF-8 byte counts and
+  inline evidence-reference count in Native dispatch plan v2.
+- Bind each compact dispatch and Skill installation receipt to the canonical
+  three-member Tura Skill contract digest.
+
+### Changed
+
+- Move repeated execution policy out of every Native dispatch and keep it in the
+  versioned Skill. A representative read-only context dispatch falls from 4,331
+  to 2,971 UTF-8 bytes while retaining its exact terminal template.
+- Accept historical digest-only filenames for immutable v1 packet reads without
+  migrating them or making unprofiled packets dispatchable.
+- Bound Native terminal callbacks to 65,536 UTF-8 bytes and 32 evidence items;
+  larger artifacts must be returned by immutable reference and digest.
+
+## [0.3.5] - 2026-09-05
+
+### Fixed
+
+- Prevent read-only fast-path probes from assigning zsh special parameters such
+  as `path` and `status`, and require hidden-root-aware file enumeration. This
+  removes two observed pre-terminal command failures without adding a helper
+  process or alternate execution path.
+
+## [0.3.4] - 2026-09-05
+
+### Fixed
+
+- Embed the exact canonical two-line terminal template in every read-only fast
+  path dispatch. The worker no longer needs source/test discovery and cannot
+  silently substitute a historical callback marker that parent intake rejects.
+
+## [0.3.3] - 2026-09-05
+
+### Changed
+
+- Emit `NATIVE_TURA_READ_ONLY_FAST_PATH_V1` when every admitted execution scope
+  is explicitly `read:`-only. The worker uses one batched read stage, resolves
+  its task identity from `CODEX_THREAD_ID`, and proceeds directly to the single
+  canonical callback.
+- Remove redundant child-side package/test discovery, terminal render/parse
+  self-verification, and progress narration from the read-only path. Parent
+  callback parsing, exact task bindings, and no-blind-retry remain unchanged.
+
+## [0.3.2] - 2026-09-05
+
+### Fixed
+
+- Define Native callback success from the actual `CallToolResult` contract,
+  avoiding false `CALLBACK_DELIVERY_UNSETTLED` results when the official tool
+  returns a destination content block without `structuredContent.status`.
+- Fix Native Tura dispatch reasoning at the supported `max` ceiling and reject
+  `ultra` rather than silently relabeling or downgrading a task.
+
+### Added
+
+- Add a content-addressed Native execution profile that compiles exact model,
+  reasoning, and official `create_thread` target arguments without creating a
+  second dispatcher or lifecycle owner.
+- Add `tura-taskpacket prepare-dispatch` so a Commander can mechanically prepare
+  one first-class Native task from a verified profile-bound capsule.
+- Add a canonical `[TURA_NATIVE_TERMINAL_V1]` JSON callback envelope, parser,
+  and schema with exact callback, parent, and task identity checks.
+- Publish one shared task-projection schema and validator for bounded DCF/J-Space
+  context producers.
+- Add an explicit, rollback-preserving `install-skill --replace` adoption path
+  while keeping drift rejection as the default behavior.
+- Add a compact `tura-taskpacket load --format dispatch` view that invokes the
+  Native Tura Skill with a pre-verified task projection and J-Space policy,
+  avoiding an extra bootstrap tool turn and repeated evidence hashing.
+- Package the source-authoritative `$tura-kernel` Skill, metadata, and Native
+  topology, plus an atomic `tura-taskpacket install-skill` parity installer.
+- Verify exact Skill member identities in source tests, public readiness,
+  wheel/sdist inspection, and clean-install smoke coverage.
+- Add a content-addressed Native Tura task capsule and dependency-free
+  `tura-taskpacket` loader so a Native Codex child can recover its exact bounded
+  task from its canonical task name without a Codex core patch or second
+  lifecycle service.
+- Support monotonic immutable packet revisions for a resumed Native child;
+  loading selects the unique highest revision without a mutable current pointer.
+
+### Changed
+
+- Verify every source package member byte-for-byte in both wheel and sdist,
+  then repeat those checks after a clean isolated wheel install.
+- Remove stale reproducible packaging state and require two builds under the
+  same `SOURCE_DATE_EPOCH` to produce identical artifact digests, including a
+  content-preserving normalization of sdist ownership, timestamps, and order.
+- Move networked external-runtime lineage checks to a separate scheduled/manual
+  component-conformance workflow so they cannot block Native package releases.
+- Bind the packaged Native Tura role to the verified capsule bootstrap when a
+  dynamic parent message is unavailable or unreadable.
+
 ## [0.2.2] - 2026-09-03
 
 ### Fixed

@@ -33,22 +33,13 @@ make check
 ```
 
 `make check` runs the review-readiness scan, evidence-manifest integrity check,
-full unit suite, synthetic demo, and import smoke test. Packaging is a separate predicate:
-`make build` requires the optional development build dependency and writes
-artifacts under `dist/`.
-
-## Current Source Snapshot
-
-On 2026-09-03, the current source tree produced:
-
-- exact complete-cycle selector: `Ran 1 test` and `OK`;
-- full suite: `Ran 73 tests` and `OK`;
-- review-readiness scan: 54 authored public files, passed;
-- evidence-manifest integrity: 1 covered artifact, passed;
-- synthetic demo and import smoke check: passed.
-
-This is source-tree evidence, not a release or installed-runtime claim. A release
-record must repeat the commands against its exact candidate commit/artifact.
+full unit suite, synthetic demo, and import smoke test. Test counts belong to
+the exact run receipt and are intentionally not frozen in this document.
+Packaging is a separate predicate: `make release-check` removes reproducible
+`dist/`, `build/`, and `*.egg-info` state, normalizes sdist container metadata,
+builds both artifacts twice under one `SOURCE_DATE_EPOCH`, verifies identical
+digests and source parity, installs the
+wheel in an isolated environment, and writes checksums.
 
 ## Public End-to-End Scenario
 
@@ -74,7 +65,8 @@ runtime.
 
 ## Invariant Matrix
 
-The suite contains 77 tests. Its direct evidence is:
+The suite count is discovered from the current source rather than frozen in
+documentation. Its direct evidence is:
 
 | Test area | Direct observation |
 |---|---|
@@ -117,10 +109,16 @@ The suite contains 77 tests. Its direct evidence is:
 | Tura transport/terminal failure | Transport exceptions and explicit terminal failures become deterministic typed failures |
 | Tura identity closure | Packet, lease, request, and executor drift is rejected before becoming a core result |
 | Tura/core failure composition | Execution failures and typed rejections preserve the exact failure code, detail digest, and observed effect across the adapter-to-core boundary; a second execution is blocked until explicit `NONE` or `SETTLED` reconciliation |
+| Native Tura task bootstrap | A canonical Native task name resolves the unique highest immutable capsule revision; TaskPacket, callback, revision, content digest, file mode, link count, duplicate-key, tamper, traversal, stale-revision, and same-revision conflict checks fail closed before execution. Historical digest-only v1 filenames are readable but remain unprofiled and non-dispatchable. |
+| Native packet inventory | Read-only inspection classifies every revision as `CURRENT_PROFILED`, `LEGACY_READABLE`, or `REJECTED` and binds the complete deterministic result to one digest without migration. |
+| Native execution profile | `inherit`, mutable initial `preferred`, and reproducible `pinned` policies compile with the official task target, Skill-contract digest, prompt digest, exact UTF-8 size metrics, and callback identity into one deterministic `create_thread` plan; unsupported pinned `ultra` is rejected rather than downgraded. |
+| Native callback intake | Only the exact marker plus canonical terminal JSON is accepted; callback, parent, and task identity mismatches fail before mission intake, callbacks over 65,536 UTF-8 bytes fail, and evidence is capped at 32 items. |
+| Skill adoption | Identical installation is a no-op, drift is rejected by default, and explicit replacement records the preimage and verifies the new target atomically |
+| Artifact/source parity | Wheel and sdist package member sets and bytes exactly equal the source package, and the installed wheel exposes the same Skill and protocol resources |
 
 The implementation has additional structural validation, and future paths may
-need new dedicated fixtures. Public evidence is limited to the 73 tests above
-and the exact source under review.
+need new dedicated fixtures. Public evidence is limited to the exact tests and
+source bound to the reviewed run.
 
 ## Reproduction Record
 
@@ -155,15 +153,18 @@ artifact identity and the actual adapter behavior were separately read back.
 
 ## Release Artifact Verification
 
-`make build && make verify-dist` requires exactly one wheel and one sdist,
-checks that both contain the versioned Tura schemas/golden vectors, installs the
-wheel in a fresh isolated virtual environment with no index or dependencies,
-checks installed metadata/imports outside the repository, runs `pip check`, and
-writes `dist/SHA256SUMS`. The tag-triggered release workflow additionally
-requires an annotated tag matching `pyproject.toml` and emits GitHub build
-provenance for those checksums.
+`make release-check` removes stale reproducible packaging output, runs the
+complete source contract, builds exactly one wheel and one sdist twice, and
+requires both builds to have identical artifact names and SHA-256 values. Every
+packaged source member must also appear byte-for-byte in both artifact formats.
+It then installs the wheel in a fresh isolated virtual environment with no index
+or dependencies, checks installed metadata/imports and the Native CLI outside
+the repository, runs `pip check`, and writes `dist/SHA256SUMS`. The tag-triggered release
+workflow additionally requires an annotated tag matching `pyproject.toml` and
+emits GitHub build provenance for those checksums.
 
 `make check-components` is a separate networked predicate that verifies the
-public Tura branch, exact commit trees, ancestry, license, and modification
-notice. Its success establishes source lineage only, never installed/runtime
-acceptance.
+optional public Tura branch, exact commit trees, ancestry, license, and
+modification notice. It runs in a scheduled/manual component-conformance
+workflow rather than gating Native CI or release. Its success establishes source
+lineage only, never installed/runtime acceptance.

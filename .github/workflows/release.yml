@@ -38,17 +38,10 @@ jobs:
         run: |
           python -m pip install pip==26.2.1
           python -m pip install '.[dev]'
-      - name: Run source and public component acceptance
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          make check PYTHON=python
-          make check-components PYTHON=python
-      - name: Build and verify distributions
+      - name: Run source and release artifact acceptance
         run: |
           export SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
-          make build PYTHON=python
-          make verify-dist PYTHON=python
+          make release-check PYTHON=python
       - name: Attest release artifacts
         id: attest
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2

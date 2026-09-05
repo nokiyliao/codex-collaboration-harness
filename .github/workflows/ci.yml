@@ -30,14 +30,6 @@ jobs:
         run: make check PYTHON=python
       - name: Verify installed package import
         run: make installed-smoke PYTHON=python
-      - name: Verify public Tura component lineage
+      - name: Build and verify clean release artifacts
         if: matrix.python-version == '3.12'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: make check-components PYTHON=python
-      - name: Build source and wheel distributions
-        if: matrix.python-version == '3.12'
-        run: make build PYTHON=python
-      - name: Verify clean wheel install and artifact checksums
-        if: matrix.python-version == '3.12'
-        run: make verify-dist PYTHON=python
+        run: make release-check PYTHON=python

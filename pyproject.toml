@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codex-collaboration-harness"
-version = "0.2.2"
+version = "0.3.10"
 description = "A deterministic, domain-neutral harness for bounded multi-agent collaboration."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,6 +27,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.scripts]
+tura-taskpacket = "codex_collaboration_harness.native_tura:main"
+
 [project.urls]
 Homepage = "https://github.com/nokiyliao/codex-collaboration-harness"
 Repository = "https://github.com/nokiyliao/codex-collaboration-harness"
@@ -46,6 +49,9 @@ where = ["src"]
 [tool.setuptools.package-data]
 codex_collaboration_harness = [
   "agents/*.toml",
+  "skills/tura-kernel/*.md",
+  "skills/tura-kernel/agents/*.yaml",
+  "skills/tura-kernel/references/*.md",
   "py.typed",
   "protocol/*.json",
   "protocol/golden/*.json",

@@ -21,13 +21,22 @@ It is intentionally an in-memory reference, not an agent runtime, workflow
 service, sandbox, durable queue, or authorization system. Integrators provide
 the actual worker, persistence, effect, and callback adapters.
 
-The preferred Codex deployment profile packages Tura as a thin native agent
-role. Native Codex remains the sole owner of task persistence, child lifecycle,
-tools, and direct-parent callback; the role contributes only bounded execution
-policy. The exact installable role is
-[`agents/tura.toml`](src/codex_collaboration_harness/agents/tura.toml), with the
-topology and drift-safe installation procedure documented in
-[`docs/native-tura-role.md`](docs/native-tura-role.md).
+The preferred Codex deployment profile packages Tura as the explicitly invoked
+[`$tura-kernel` Skill](src/codex_collaboration_harness/skills/tura-kernel/SKILL.md).
+The parent creates a first-class Native Codex task; Native Codex remains the sole
+owner of task persistence, tools, provider turns, and restart recovery, while
+the Skill contributes bounded execution policy and returns one official
+`send_message_to_thread` callback. The older
+[`agents/tura.toml`](src/codex_collaboration_harness/agents/tura.toml) remains a
+compatibility resource rather than the operational dispatch baseline. See
+[`docs/native-tura-role.md`](docs/native-tura-role.md) for the topology and
+drift-safe installation procedure.
+
+Ordinary Native Tura dispatch can inherit the current Native Codex model and
+reasoning setting, or request a `preferred` pair for its first turn without
+binding later turns to it. Explicit benchmark or reproduction profiles may pin
+both values; `thinking="max"` is their default and highest admitted Tura effort.
+The Skill does not advertise `ultra` as a Tura tier.
 
 The package also retains an optional, transport-neutral
 [`TuraAdapter`](src/codex_collaboration_harness/adapters/tura.py). It turns the
@@ -106,8 +115,57 @@ Until a release is installed, the source-tree equivalent is:
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-There is no CLI or daemon in the reference package. Start with the public
-objects exported by `codex_collaboration_harness`; see
+There is no runtime daemon or lifecycle service in the reference package. The
+only CLI, `tura-taskpacket`, installs or verifies the packaged Skill and renders
+an immutable Native Tura task capsule. Its `--format dispatch` view is a compact
+ready-to-send Native task with task-local evidence already projected; it does
+not create sessions, dispatch workers, or write callbacks. A target-bound
+capsule can be compiled into exact official `create_thread` arguments with:
+
+```bash
+tura-taskpacket prepare-dispatch --task-name /root/example_task
+```
+
+The resulting dispatch-plan v4 JSON always binds the selection policy, target,
+Skill contract, prompt digest, callback identity, and parent thread. A
+`preferred` profile supplies initial model and reasoning arguments while
+allowing later official Native turns to override them. A pinned profile binds
+the exact pair for reproducibility; an inherited profile omits both from
+`create_thread` so Native Codex selects them. It also
+reports exact UTF-8 byte counts for the dispatch, projected task context, and
+J-Space policy plus the inline evidence-reference count. The Commander still
+performs the official task creation. A reviewed Skill update can be adopted
+atomically with `tura-taskpacket install-skill --replace`; without `--replace`,
+any target drift continues to fail closed.
+
+Audit an existing packet root without migrating or dispatching anything with:
+
+```bash
+tura-taskpacket inspect-packets
+```
+
+The inventory separates current target-bound packets from readable historical
+packets and exact rejected members. Historical digest-only v1 filenames remain
+readable, but they still fail `prepare-dispatch` because they have no execution
+profile. Add `--summary` when only the counts, total, root, and full inventory
+digest are needed; this avoids carrying the per-packet rows into a callback turn.
+
+Capsules whose scopes are all explicitly prefixed with `read:` receive the
+`NATIVE_TURA_READ_ONLY_FAST_PATH_V1` and
+`NATIVE_TURA_FAST_PATH_EXECUTION_V3` markers. The inline fast-path contract is
+self-contained, so those tasks do not spend a Native tool continuation reading
+the Skill file. They obtain
+`CODEX_THREAD_ID` in the same first batch as every task read, proceed directly
+to the single terminal callback, and emit only a fixed delivery acknowledgement
+after tool success. The compiler embeds the exact two-line canonical terminal
+template so the worker cannot drift to a historical marker while source/test
+discovery is disabled. The fast-path command contract also avoids zsh
+special-parameter collisions and requires hidden-root-aware file enumeration.
+The terminal marker plus canonical JSON is limited to 65,536 UTF-8 bytes and 32
+evidence items; large logs and artifacts travel as immutable references and
+digests rather than inline callback content.
+
+Start with the public objects exported by `codex_collaboration_harness`; see
 [`docs/verification.md`](docs/verification.md) for the exact verification
 contract and [`docs/architecture.md`](docs/architecture.md) for the lifecycle.
 
@@ -127,6 +185,15 @@ tests, the synthetic demo, and import smoke check, run:
 make check
 ```
 
+For the complete release predicate, including removal of reproducible packaging
+state, deterministic sdist metadata, two byte-identical builds,
+source/wheel/sdist parity, isolated
+installation, CLI smoke test, and checksums, run:
+
+```bash
+make release-check
+```
+
 Networked verification of the public Tura component ref, exact Git trees,
 ancestry, license, and modification notice is deliberately separate:
 
@@ -136,8 +203,10 @@ make check-components
 
 The packaged protocol schemas and cross-language golden vectors live under
 [`src/codex_collaboration_harness/protocol`](src/codex_collaboration_harness/protocol).
-Both request and terminal envelopes are bound to
-`protocol_version=tura-collaboration/v1`.
+The external-runtime request and terminal envelopes are bound to
+`protocol_version=tura-collaboration/v1`. The preferred Native profile also
+packages schemas for the task projection, execution profile, and exact
+`[TURA_NATIVE_TERMINAL_V1]` callback.
 
 ## What Is Verified
 

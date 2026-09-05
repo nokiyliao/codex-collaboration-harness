@@ -306,6 +306,10 @@ def build_tura_dispatch_request(
 ) -> TuraDispatchRequest:
     """Compile the exact public packet/lease identity into a Tura request."""
 
+    if packet.task_context_binding is not None:
+        raise ValueError(
+            "task-context-bound packets require the Native Tura task bootstrap"
+        )
     if lease.packet_id != packet.packet_id or lease.scope != packet.scope:
         raise ValueError("lease does not bind the supplied packet and scope")
     claimed = tuple((name, version + 1) for name, version in packet.scope_versions)
