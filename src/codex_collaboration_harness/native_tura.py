@@ -502,7 +502,7 @@ class NativeTuraTaskCapsule:
                     parent_thread_id=self.parent_thread_id,
                     task_thread_id="<CODEX_THREAD_ID>",
                     status="PREDICATE_ADVANCED",
-                    mission=self.mission,
+                    mission=self.task_packet.mission_id,
                     predicate=self.task_packet.predicate_key,
                     predicate_delta="<replace with actual predicate delta>",
                     evidence=(),

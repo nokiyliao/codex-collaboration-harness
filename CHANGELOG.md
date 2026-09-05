@@ -7,6 +7,15 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-09-05
+
+### Changed
+
+- Reference the existing TaskPacket mission ID in read-only terminal templates
+  instead of duplicating the full task instructions. The task body preserves
+  the exact instructions, while capsule and callback identities and historical
+  terminal decoding remain unchanged.
+
 ## [0.3.9] - 2026-09-05
 
 ### Added

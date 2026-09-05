@@ -113,6 +113,12 @@ PY
 
 ## Native Dispatch
 
+Read-only fast-path dispatches include the full mission instructions once in
+the task body. Their terminal template uses the existing `TaskPacket.mission_id`
+as its `mission` value instead of copying those instructions into the callback.
+The capsule, callback identity, and exact instruction text are unchanged;
+historical terminals containing descriptive mission text remain readable.
+
 A parent uses official `create_thread` and explicitly invokes `$tura-kernel` in
 the initial prompt together with the five decision fields:
 

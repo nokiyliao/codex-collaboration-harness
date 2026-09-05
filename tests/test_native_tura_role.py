@@ -379,9 +379,48 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
                 expected_task_thread_id="<CODEX_THREAD_ID>",
             )
             self.assertEqual(template.status, "PREDICATE_ADVANCED")
+            self.assertEqual(template.mission, packet.mission_id)
             self.assertEqual(template.predicate, packet.predicate_key)
             self.assertEqual(template.authority_effect, "none")
             self.assertEqual(template.protected_effect_count, 0)
+
+    def test_fast_path_keeps_full_mission_once_and_terminal_uses_its_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            packet = replace(
+                make_packet(),
+                scope=("read:source-package",),
+                scope_versions=(("read:source-package", 1),),
+                recovery_budget=0,
+            )
+            mission = "EXACT_TASK_INSTRUCTIONS\n" + "Preserve exact source evidence. " * 128
+            publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission=mission,
+                shortest_valid_route="Read the admitted source once.",
+                task_packet=packet,
+                root=root,
+            )
+            capsule = load_native_tura_task_capsule(TASK_NAME, root=root)
+            wire_before = capsule.to_wire()
+
+            dispatch = capsule.render_dispatch()
+
+            self.assertEqual(dispatch.count("EXACT_TASK_INSTRUCTIONS"), 1)
+            self.assertIn("MISSION\n" + mission + "\n", dispatch)
+            marker_index = dispatch.index(f"{NATIVE_TURA_TERMINAL_MARKER}\n")
+            template_text = dispatch[marker_index:].split("\n\nMISSION\n", 1)[0]
+            terminal = parse_native_tura_terminal_callback(
+                template_text,
+                expected_callback_id=capsule.callback_id,
+                expected_parent_thread_id=packet.destination.thread_id,
+                expected_task_thread_id="<CODEX_THREAD_ID>",
+            )
+            self.assertEqual(terminal.mission, packet.mission_id)
+            self.assertNotIn("EXACT_TASK_INSTRUCTIONS", terminal.render())
+            self.assertEqual(capsule.to_wire(), wire_before)
+            self.assertEqual(capsule.mission, mission)
+            self.assertEqual(capsule.render_dispatch(), dispatch)
 
     def test_cli_renders_ready_to_send_context_dispatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
