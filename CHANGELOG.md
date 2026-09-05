@@ -11,6 +11,9 @@ Versioning after the first public release.
 
 ### Changed
 
+- Integrate the published v0.2.2 release ancestry with the accepted Native Tura
+  lineage without changing source or test bytes. Preserve the original v0.2.2
+  correctness-fix history below; release artifacts are rebuilt from this lineage.
 - Reference the existing TaskPacket mission ID in read-only terminal templates
   instead of duplicating the full task instructions. The task body preserves
   the exact instructions, while capsule and callback identities and historical
@@ -112,13 +115,6 @@ Versioning after the first public release.
   returns a destination content block without `structuredContent.status`.
 - Fix Native Tura dispatch reasoning at the supported `max` ceiling and reject
   `ultra` rather than silently relabeling or downgrading a task.
-- Prevent every terminal path from releasing a packet lease while a persisted
-  step effect remains unsettled, without partially recording the final effect.
-- Convert malformed executor returns into harness-origin typed failures that
-  retain the exact lease and explicit reconciliation path.
-- Require recovery steps to bind an admitted proposal action and match its
-  operation digest and effect class.
-- Preserve existing content-addressed identities for non-recovery step records.
 
 ### Added
 
@@ -158,6 +154,18 @@ Versioning after the first public release.
   component-conformance workflow so they cannot block Native package releases.
 - Bind the packaged Native Tura role to the verified capsule bootstrap when a
   dynamic parent message is unavailable or unreadable.
+
+## [0.2.2] - 2026-09-03
+
+### Fixed
+
+- Prevent every terminal path from releasing a packet lease while a persisted
+  step effect remains unsettled, without partially recording the final effect.
+- Convert malformed executor returns into harness-origin typed failures that
+  retain the exact lease and explicit reconciliation path.
+- Require recovery steps to bind an admitted proposal action and match its
+  operation digest and effect class.
+- Preserve existing content-addressed identities for non-recovery step records.
 
 ## [0.2.1] - 2026-09-03
 
