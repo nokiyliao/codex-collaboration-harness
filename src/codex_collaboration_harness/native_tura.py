@@ -33,8 +33,9 @@ from .core import (
 LEGACY_NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v1"
 NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v2"
 PROFILED_NATIVE_TURA_CAPSULE_VERSION = "native-tura-task-capsule/v3"
-NATIVE_TURA_EXECUTION_PROFILE_VERSION = "native-tura-execution-profile/v1"
-NATIVE_TURA_DISPATCH_PLAN_VERSION = "native-tura-dispatch-plan/v3"
+LEGACY_NATIVE_TURA_EXECUTION_PROFILE_VERSION = "native-tura-execution-profile/v1"
+NATIVE_TURA_EXECUTION_PROFILE_VERSION = "native-tura-execution-profile/v2"
+NATIVE_TURA_DISPATCH_PLAN_VERSION = "native-tura-dispatch-plan/v4"
 NATIVE_TURA_SKILL_CONTRACT_VERSION = "tura-kernel-skill-contract/v1"
 NATIVE_TURA_PACKET_INSPECTION_VERSION = "native-tura-packet-inspection/v1"
 NATIVE_TURA_TERMINAL_SCHEMA_VERSION = "tura_native_terminal_v1"
@@ -105,7 +106,7 @@ _TASK_PROJECTION_KEYS = {
     "task_id",
     "task_visible_pre_task_evidence_only",
 }
-_EXECUTION_PROFILE_KEYS = {
+_EXECUTION_PROFILE_V1_KEYS = {
     "directory_name",
     "environment",
     "model",
@@ -115,6 +116,7 @@ _EXECUTION_PROFILE_KEYS = {
     "target_type",
     "thinking",
 }
+_EXECUTION_PROFILE_KEYS = _EXECUTION_PROFILE_V1_KEYS | {"selection_policy"}
 _JSPACE_V1_KEYS = {
     "allowed_operations",
     "command_prefixes",
@@ -191,6 +193,7 @@ _NATIVE_TERMINAL_STATUSES = {
     "BLOCKED",
 }
 _NATIVE_REASONING_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
+_NATIVE_EXECUTION_SELECTION_POLICIES = {"inherit", "preferred", "pinned"}
 
 
 def _uses_read_only_fast_path(packet: TaskPacket) -> bool:
@@ -210,27 +213,60 @@ class NativeTuraPacketError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class NativeTuraExecutionProfile:
-    """Exact Native Codex execution settings bound to one Tura dispatch."""
+    """Native task target plus inherited or reproducibly pinned model settings."""
 
-    model: str
-    thinking: str = NATIVE_TURA_REASONING_EFFORT
+    model: str | None = None
+    thinking: str | None = None
     target_type: str = "projectless"
     project_id: str | None = None
     environment: str | None = None
     directory_name: str | None = None
+    selection_policy: str | None = None
     schema_version: str = NATIVE_TURA_EXECUTION_PROFILE_VERSION
     profile_sha256: str = field(init=False)
 
     def __post_init__(self) -> None:
-        if self.schema_version != NATIVE_TURA_EXECUTION_PROFILE_VERSION:
+        if self.schema_version not in {
+            LEGACY_NATIVE_TURA_EXECUTION_PROFILE_VERSION,
+            NATIVE_TURA_EXECUTION_PROFILE_VERSION,
+        }:
             raise NativeTuraPacketError(
                 "EXECUTION_PROFILE_VERSION_UNSUPPORTED", self.schema_version
             )
-        _require_text("execution_profile.model", self.model)
-        if self.thinking not in _NATIVE_REASONING_EFFORTS:
+        selection_policy = self.selection_policy
+        if self.schema_version == LEGACY_NATIVE_TURA_EXECUTION_PROFILE_VERSION:
+            if selection_policy not in {None, "pinned"}:
+                raise NativeTuraPacketError(
+                    "EXECUTION_PROFILE_SELECTION_POLICY_INVALID",
+                    "v1 execution profiles are always pinned",
+                )
+            selection_policy = "pinned"
+        elif selection_policy is None:
+            selection_policy = (
+                "preferred"
+                if self.model is not None or self.thinking is not None
+                else "inherit"
+            )
+        if selection_policy not in _NATIVE_EXECUTION_SELECTION_POLICIES:
             raise NativeTuraPacketError(
-                "TURA_REASONING_EFFORT_UNSUPPORTED",
-                f"thinking must be one of {sorted(_NATIVE_REASONING_EFFORTS)}",
+                "EXECUTION_PROFILE_SELECTION_POLICY_INVALID",
+                "selection_policy must be inherit, preferred, or pinned",
+            )
+        object.__setattr__(self, "selection_policy", selection_policy)
+
+        if selection_policy in {"preferred", "pinned"}:
+            _require_text("execution_profile.model", self.model)
+            thinking = self.thinking or NATIVE_TURA_REASONING_EFFORT
+            if thinking not in _NATIVE_REASONING_EFFORTS:
+                raise NativeTuraPacketError(
+                    "TURA_REASONING_EFFORT_UNSUPPORTED",
+                    f"thinking must be one of {sorted(_NATIVE_REASONING_EFFORTS)}",
+                )
+            object.__setattr__(self, "thinking", thinking)
+        elif self.model is not None or self.thinking is not None:
+            raise NativeTuraPacketError(
+                "EXECUTION_PROFILE_INHERIT_VALUES_FORBIDDEN",
+                "inherit profiles cannot bind model or thinking",
             )
         if self.target_type == "projectless":
             if self.project_id is not None or self.environment is not None:
@@ -536,16 +572,20 @@ class NativeTuraTaskCapsule:
         ]
         profile = self.execution_profile
         if profile is not None:
-            lines.extend(
-                (
-                    "",
-                    "NATIVE_EXECUTION_PROFILE",
-                    f"profile_sha256={profile.profile_sha256}",
-                    f"model={profile.model}",
-                    f"thinking={profile.thinking}",
-                    f"target={_canonical_json_text(profile.create_thread_target())}",
+            profile_lines = [
+                "",
+                "NATIVE_EXECUTION_PROFILE",
+                f"profile_sha256={profile.profile_sha256}",
+                f"selection_policy={profile.selection_policy}",
+            ]
+            if profile.selection_policy in {"preferred", "pinned"}:
+                profile_lines.extend(
+                    (f"model={profile.model}", f"thinking={profile.thinking}")
                 )
+            profile_lines.append(
+                f"target={_canonical_json_text(profile.create_thread_target())}"
             )
+            lines.extend(profile_lines)
         context = self.verified_task_context
         if context is not None:
             lines.extend(
@@ -1877,7 +1917,7 @@ def canonical_task_projection(
 def _execution_profile_payload(
     profile: NativeTuraExecutionProfile,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "schema_version": profile.schema_version,
         "model": profile.model,
         "thinking": profile.thinking,
@@ -1886,6 +1926,9 @@ def _execution_profile_payload(
         "environment": profile.environment,
         "directory_name": profile.directory_name,
     }
+    if profile.schema_version == NATIVE_TURA_EXECUTION_PROFILE_VERSION:
+        payload["selection_policy"] = profile.selection_policy
+    return payload
 
 
 def _decode_execution_profile(value: object) -> NativeTuraExecutionProfile:
@@ -1893,13 +1936,34 @@ def _decode_execution_profile(value: object) -> NativeTuraExecutionProfile:
         raise NativeTuraPacketError(
             "EXECUTION_PROFILE_SHAPE_INVALID", "execution_profile must be an object"
         )
-    _require_exact_keys("execution_profile", value, _EXECUTION_PROFILE_KEYS)
+    schema_version = _require_text(
+        "execution_profile.schema_version", value.get("schema_version")
+    )
+    if schema_version == LEGACY_NATIVE_TURA_EXECUTION_PROFILE_VERSION:
+        _require_exact_keys("execution_profile", value, _EXECUTION_PROFILE_V1_KEYS)
+        selection_policy = "pinned"
+    elif schema_version == NATIVE_TURA_EXECUTION_PROFILE_VERSION:
+        _require_exact_keys("execution_profile", value, _EXECUTION_PROFILE_KEYS)
+        selection_policy = _require_text(
+            "execution_profile.selection_policy", value["selection_policy"]
+        )
+    else:
+        raise NativeTuraPacketError(
+            "EXECUTION_PROFILE_VERSION_UNSUPPORTED", schema_version
+        )
     profile = NativeTuraExecutionProfile(
-        schema_version=_require_text(
-            "execution_profile.schema_version", value["schema_version"]
+        schema_version=schema_version,
+        selection_policy=selection_policy,
+        model=(
+            None
+            if value["model"] is None
+            else _require_text("execution_profile.model", value["model"])
         ),
-        model=_require_text("execution_profile.model", value["model"]),
-        thinking=_require_text("execution_profile.thinking", value["thinking"]),
+        thinking=(
+            None
+            if value["thinking"] is None
+            else _require_text("execution_profile.thinking", value["thinking"])
+        ),
         target_type=_require_text(
             "execution_profile.target_type", value["target_type"]
         ),
@@ -1930,7 +1994,7 @@ def _decode_execution_profile(value: object) -> NativeTuraExecutionProfile:
 
 
 def prepare_native_tura_dispatch(capsule: NativeTuraTaskCapsule) -> dict[str, Any]:
-    """Compile one profile-bound capsule into official create_thread arguments."""
+    """Compile one target-bound capsule into official create_thread arguments."""
 
     profile = capsule.execution_profile
     if profile is None:
@@ -1952,18 +2016,19 @@ def prepare_native_tura_dispatch(capsule: NativeTuraTaskCapsule) -> dict[str, An
         "skill_contract_sha256": skill_contract["semantic_sha256"],
         "prompt_sha256": prompt_sha256,
     }
+    create_thread = {
+        "prompt": prompt,
+        "target": profile.create_thread_target(),
+    }
+    if profile.selection_policy in {"preferred", "pinned"}:
+        create_thread.update({"model": profile.model, "thinking": profile.thinking})
     return {
         **identity,
         "dispatch_id": "tura_dispatch_" + canonical_sha256(identity),
         "dispatch_utf8_bytes": len(prompt.encode("utf-8")),
         **context_metrics,
         "skill_contract": skill_contract,
-        "create_thread": {
-            "model": profile.model,
-            "thinking": profile.thinking,
-            "prompt": prompt,
-            "target": profile.create_thread_target(),
-        },
+        "create_thread": create_thread,
         "terminal_contract": {
             "marker": NATIVE_TURA_TERMINAL_MARKER,
             "schema_version": NATIVE_TURA_TERMINAL_SCHEMA_VERSION,
@@ -2328,7 +2393,7 @@ def _build_parser() -> argparse.ArgumentParser:
     load.add_argument("--format", choices=("dispatch", "json", "task"), default="task")
     prepare = subparsers.add_parser(
         "prepare-dispatch",
-        help="compile a profile-bound capsule into official create_thread arguments",
+        help="compile a target-bound capsule into official create_thread arguments",
     )
     prepare.add_argument("--task-name", required=True)
     install = subparsers.add_parser(

@@ -7,7 +7,7 @@ The lowest-cost deployment uses Native Codex as the only runtime owner:
 ```text
 parent mission / ordered predicates
   -> Native Codex task persistence and lifecycle
-  -> packaged thin Tura Skill + profile-bound dispatch
+  -> packaged thin Tura Skill + target-bound dispatch policy
   -> native tools and effects
   -> strict native direct-parent callback
   -> parent mission verification

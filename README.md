@@ -32,8 +32,11 @@ compatibility resource rather than the operational dispatch baseline. See
 [`docs/native-tura-role.md`](docs/native-tura-role.md) for the topology and
 drift-safe installation procedure.
 
-Native Tura dispatch uses `thinking="max"` as its default and highest admitted
-reasoning effort. The Skill does not advertise `ultra` as a Tura tier.
+Ordinary Native Tura dispatch can inherit the current Native Codex model and
+reasoning setting, or request a `preferred` pair for its first turn without
+binding later turns to it. Explicit benchmark or reproduction profiles may pin
+both values; `thinking="max"` is their default and highest admitted Tura effort.
+The Skill does not advertise `ultra` as a Tura tier.
 
 The package also retains an optional, transport-neutral
 [`TuraAdapter`](src/codex_collaboration_harness/adapters/tura.py). It turns the
@@ -116,15 +119,19 @@ There is no runtime daemon or lifecycle service in the reference package. The
 only CLI, `tura-taskpacket`, installs or verifies the packaged Skill and renders
 an immutable Native Tura task capsule. Its `--format dispatch` view is a compact
 ready-to-send Native task with task-local evidence already projected; it does
-not create sessions, dispatch workers, or write callbacks. A profile-bound
+not create sessions, dispatch workers, or write callbacks. A target-bound
 capsule can be compiled into exact official `create_thread` arguments with:
 
 ```bash
 tura-taskpacket prepare-dispatch --task-name /root/example_task
 ```
 
-The resulting dispatch-plan v3 JSON binds the model, reasoning effort, target,
-Skill contract, prompt digest, callback identity, and parent thread. It also
+The resulting dispatch-plan v4 JSON always binds the selection policy, target,
+Skill contract, prompt digest, callback identity, and parent thread. A
+`preferred` profile supplies initial model and reasoning arguments while
+allowing later official Native turns to override them. A pinned profile binds
+the exact pair for reproducibility; an inherited profile omits both from
+`create_thread` so Native Codex selects them. It also
 reports exact UTF-8 byte counts for the dispatch, projected task context, and
 J-Space policy plus the inline evidence-reference count. The Commander still
 performs the official task creation. A reviewed Skill update can be adopted
@@ -137,7 +144,7 @@ Audit an existing packet root without migrating or dispatching anything with:
 tura-taskpacket inspect-packets
 ```
 
-The inventory separates current profile-bound packets from readable historical
+The inventory separates current target-bound packets from readable historical
 packets and exact rejected members. Historical digest-only v1 filenames remain
 readable, but they still fail `prepare-dispatch` because they have no execution
 profile. Add `--summary` when only the counts, total, root, and full inventory

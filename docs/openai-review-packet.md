@@ -83,7 +83,7 @@ requiring a private agent runtime.
 | Model recovery cannot expand its authority | Blocker, step ledger, recovery gate, budget, policy escalation, and duplicate-fingerprint tests | Production sandbox and policy remain external |
 | Task completion is not mission completion | Worker-claim versus parent-`MissionSnapshotReadback` tests | Integration must supply an authoritative current reader |
 | Runtime dependency surface is small | Package metadata and imports | Development/release tooling still requires review |
-| Native Tura is a portable Codex role | Packaged exact role bytes, profile-bound dispatch compiler, strict terminal parser, full source/artifact byte parity, and Native ownership documentation | A real Codex deployment must still prove role discovery, task creation, and direct-parent callback |
+| Native Tura is a portable Codex role | Packaged exact role bytes, target-bound dispatch compiler with inherited, preferred, and pinned model policies, strict terminal parser, full source/artifact byte parity, and Native ownership documentation | A real Codex deployment must still prove role discovery, task creation, and direct-parent callback |
 | External Tura remains an optional implementation route | Public adapter, terminal envelope, fake client, and conformance tests | A real external deployment still supplies transport, durability, credentials, and effect authority |
 | The modified runtime is inspectable | Public AGPL fork, exact component manifest, and networked ref/tree/ancestry check | Public source is not installed/running acceptance |
 | Internal measurements motivated publication | Labeled aggregate summary | Underlying corpus is not public or reproducible here |

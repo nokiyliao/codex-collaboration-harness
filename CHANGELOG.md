@@ -7,6 +7,18 @@ Versioning after the first public release.
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-09-05
+
+### Added
+
+- Add execution-profile v2 with `inherit`, `preferred`, and `pinned` model
+  selection policies. Ordinary tasks can inherit Native Codex settings or
+  request an initial model without invalidating later model changes; exact pins
+  remain available for benchmarks and reproductions.
+- Version the conditional `create_thread` argument shape as dispatch-plan v4.
+- Preserve read compatibility for historical v1 profiles as exact pinned
+  profiles.
+
 ## [0.3.8] - 2026-09-05
 
 ### Changed

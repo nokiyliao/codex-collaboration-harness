@@ -9,8 +9,10 @@ This task is Native Codex. Codex owns its thread, persistence, provider, tools,
 receipts, interruption recovery, and process lifecycle. Tura adds execution
 policy and one direct terminal callback; it is not a second runtime.
 
-`thinking="max"` is the highest admitted Tura effort. Reject a higher declared
-effort as `TURA_REASONING_EFFORT_UNSUPPORTED`; never silently relabel it.
+Ordinary Tura tasks inherit Native Codex model and reasoning settings. For a
+reproducibly pinned task, `thinking="max"` is the highest admitted Tura effort.
+Reject a higher pinned effort as `TURA_REASONING_EFFORT_UNSUPPORTED`; never
+silently relabel it.
 
 Read [references/native-topology.md](references/native-topology.md) only when
 the task diagnoses ownership, callback delivery, or legacy retirement.
@@ -28,9 +30,13 @@ The persisted initial user message must contain:
 - `callback_id`
 
 Do not infer missing input from chat history, names, sibling tasks, or stale
-Tura state. If `NATIVE_EXECUTION_PROFILE` is present, its digest, model,
-thinking, and target must match the Native task metadata or reject with
-`TURA_NATIVE_EXECUTION_PROFILE_MISMATCH`.
+Tura state. If `NATIVE_EXECUTION_PROFILE` is present, its digest and target must
+match the Native task metadata. A `preferred` profile selects the first turn's
+model and thinking but permits later Native turns to change them without
+invalidating the task or callback. A `pinned` profile requires them to match for
+the whole task. An `inherit` profile deliberately omits those two values so the
+current Native Codex task settings may select them. Reject any mismatch covered
+by the selected policy with `TURA_NATIVE_EXECUTION_PROFILE_MISMATCH`.
 
 `NATIVE_TURA_INLINE_CAPSULE_V1` is already Commander-verified. Do not reload or
 rehash it. Start from `task_projection` and its task-local evidence. Only a

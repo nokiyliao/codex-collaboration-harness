@@ -45,6 +45,8 @@ class NativeTuraSkillTests(unittest.TestCase):
         self.assertIn("[TURA_NATIVE_TERMINAL_V1]", skill)
         self.assertIn("send_message_to_thread", skill)
         self.assertIn('thinking="max"', skill)
+        self.assertIn("Ordinary Tura tasks inherit", skill)
+        self.assertIn("An `inherit` profile deliberately omits", skill)
         self.assertIn("NATIVE_TURA_READ_ONLY_FAST_PATH_V1", skill)
         self.assertIn("NATIVE_TURA_FAST_PATH_EXECUTION_V3", skill)
         self.assertIn("Do not read this Skill file again", skill)

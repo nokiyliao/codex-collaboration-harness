@@ -19,6 +19,7 @@ from codex_collaboration_harness import (
     canonical_sha256,
 )
 from codex_collaboration_harness.native_tura import (
+    LEGACY_NATIVE_TURA_EXECUTION_PROFILE_VERSION,
     LEGACY_NATIVE_TURA_CAPSULE_VERSION,
     MAX_NATIVE_TERMINAL_BYTES,
     MAX_NATIVE_TERMINAL_EVIDENCE_ITEMS,
@@ -1012,12 +1013,44 @@ class NativeTuraTaskCapsuleTests(unittest.TestCase):
 
 
 class NativeTuraDispatchContractTests(unittest.TestCase):
+    def test_inherited_profile_omits_model_and_thinking_from_create_thread(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = NativeTuraExecutionProfile(directory_name="inherit-settings")
+            publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Run with the current Native Codex settings.",
+                shortest_valid_route="Inherit model selection at dispatch.",
+                task_packet=make_packet(),
+                execution_profile=profile,
+                root=root,
+            )
+
+            loaded = load_native_tura_task_capsule(TASK_NAME, root=root)
+            plan = prepare_native_tura_dispatch(loaded)
+
+            self.assertEqual(profile.selection_policy, "inherit")
+            self.assertIsNone(profile.model)
+            self.assertIsNone(profile.thinking)
+            self.assertNotIn("model", plan["create_thread"])
+            self.assertNotIn("thinking", plan["create_thread"])
+            self.assertEqual(
+                plan["create_thread"]["target"],
+                {"type": "projectless", "directoryName": "inherit-settings"},
+            )
+            self.assertIn("selection_policy=inherit", plan["create_thread"]["prompt"])
+            self.assertNotIn("model=", plan["create_thread"]["prompt"])
+            self.assertNotIn("thinking=", plan["create_thread"]["prompt"])
+
     def test_profile_bound_capsule_prepares_exact_create_thread_request(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             profile = NativeTuraExecutionProfile(
                 model="gpt-5.6-sol",
                 thinking="max",
+                selection_policy="pinned",
                 target_type="project",
                 project_id="project.public-harness",
                 environment="worktree",
@@ -1038,6 +1071,7 @@ class NativeTuraDispatchContractTests(unittest.TestCase):
                 PROFILED_NATIVE_TURA_CAPSULE_VERSION,
             )
             self.assertEqual(loaded.execution_profile, profile)
+            self.assertEqual(profile.selection_policy, "pinned")
             self.assertEqual(plan, prepare_native_tura_dispatch(loaded))
             self.assertEqual(plan["create_thread"]["model"], "gpt-5.6-sol")
             self.assertEqual(plan["create_thread"]["thinking"], "max")
@@ -1154,14 +1188,18 @@ class NativeTuraDispatchContractTests(unittest.TestCase):
             publish_native_tura_task_capsule(
                 **common,
                 execution_profile=NativeTuraExecutionProfile(
-                    model="gpt-5.6-sol", thinking="max"
+                    model="gpt-5.6-sol",
+                    thinking="max",
+                    selection_policy="pinned",
                 ),
                 root=root / "a",
             )
             publish_native_tura_task_capsule(
                 **common,
                 execution_profile=NativeTuraExecutionProfile(
-                    model="gpt-5.6-sol", thinking="high"
+                    model="gpt-5.6-sol",
+                    thinking="high",
+                    selection_policy="pinned",
                 ),
                 root=root / "b",
             )
@@ -1169,11 +1207,44 @@ class NativeTuraDispatchContractTests(unittest.TestCase):
             second = load_native_tura_task_capsule(TASK_NAME, root=root / "b")
             self.assertNotEqual(first.callback_id, second.callback_id)
 
+    def test_explicit_model_defaults_to_mutable_preference(self) -> None:
+        profile = NativeTuraExecutionProfile(model="gpt-6-astra", thinking="max")
+        self.assertEqual(profile.selection_policy, "preferred")
+
+    def test_v1_profile_remains_readable_as_pinned(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = NativeTuraExecutionProfile(
+                model="gpt-5.6-sol",
+                thinking="max",
+                selection_policy="pinned",
+                schema_version=LEGACY_NATIVE_TURA_EXECUTION_PROFILE_VERSION,
+            )
+            self.assertNotIn("selection_policy", profile.to_wire())
+            publish_native_tura_task_capsule(
+                canonical_task_name=TASK_NAME,
+                mission="Load one historical pinned profile.",
+                shortest_valid_route="Preserve its v1 execution identity.",
+                task_packet=make_packet(),
+                execution_profile=profile,
+                root=temporary,
+            )
+
+            loaded = load_native_tura_task_capsule(TASK_NAME, root=temporary)
+            plan = prepare_native_tura_dispatch(loaded)
+            self.assertEqual(loaded.execution_profile.selection_policy, "pinned")
+            self.assertEqual(plan["create_thread"]["model"], "gpt-5.6-sol")
+
     def test_ultra_reasoning_is_rejected_without_downgrade(self) -> None:
         with self.assertRaisesRegex(
             NativeTuraPacketError, "TURA_REASONING_EFFORT_UNSUPPORTED"
         ):
             NativeTuraExecutionProfile(model="gpt-5.6-sol", thinking="ultra")
+
+    def test_inherit_policy_rejects_concrete_model_values(self) -> None:
+        with self.assertRaisesRegex(
+            NativeTuraPacketError, "EXECUTION_PROFILE_INHERIT_VALUES_FORBIDDEN"
+        ):
+            NativeTuraExecutionProfile(model="gpt-6-astra", selection_policy="inherit")
 
     def test_prepare_dispatch_rejects_legacy_unprofiled_capsule(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

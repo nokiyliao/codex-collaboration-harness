@@ -9,9 +9,12 @@ interruption, and terminal state. Tura adds only the execution policy needed to
 keep one mission on its first false predicate and returns one official
 `send_message_to_thread` callback.
 
-The Commander creates these tasks with `thinking="max"`. This is the Skill's
-default and highest admitted reasoning effort. `ultra` is not a Tura Kernel
-tier and must be rejected rather than silently relabeled or downgraded.
+The Commander may let a task inherit the current Native Codex model and
+reasoning setting, or provide a preferred pair for its first turn. A preferred
+pair can be changed on later official Native turns without invalidating the
+task or callback. Reproducibility-sensitive tasks may instead pin an exact pair;
+`thinking="max"` is the highest admitted pinned Tura effort. `ultra` is not a
+Tura Kernel tier and must be rejected rather than silently relabeled.
 
 The canonical Skill resources are packaged at:
 
@@ -122,9 +125,11 @@ ABANDON_IF
 ```
 
 For new mechanically prepared dispatches, the parent binds a
-`NativeTuraExecutionProfile` into capsule v3. The profile's digest covers the
-exact model, supported reasoning effort, and official project/projectless
-target. `ultra` is rejected rather than silently mapped to `max`.
+`NativeTuraExecutionProfile` into capsule v3. Its digest covers the selection
+policy and official project/projectless target. `inherit` omits model and
+reasoning arguments, `preferred` supplies them only for the initial turn, and
+`pinned` makes them exact for reproducibility. `ultra` is rejected rather than
+silently mapped to `max`.
 
 Compile the verified capsule into exact official task-creation arguments with:
 
@@ -135,8 +140,10 @@ tura-taskpacket prepare-dispatch --task-name /root/example_task
 This command is a pure compiler: it emits one deterministic dispatch identity,
 one exact Skill-contract digest, deterministic payload-size metrics, and a
 `create_thread` argument object, but it does not call `create_thread`.
-Changing the execution profile changes the callback identity, preventing a task
-started with different model or target settings from reusing the old callback.
+Changing the initial execution profile changes the callback identity before
+dispatch. After creation, a preferred task may change model or reasoning on a
+later official Native turn without rewriting its capsule or callback identity;
+a pinned task may not.
 
 When every declared scope starts with `read:`, the compiler also emits
 `NATIVE_TURA_READ_ONLY_FAST_PATH_V1` and

@@ -1,6 +1,6 @@
 interface:
   display_name: "Tura Kernel"
   short_description: "Run a first-class Native Codex task with Tura execution policy"
-  default_prompt: "Use $tura-kernel at max reasoning to execute this bounded task and callback the parent task."
+  default_prompt: "Use $tura-kernel to execute this bounded task and callback the parent task."
 policy:
   allow_implicit_invocation: false
