@@ -37,7 +37,7 @@ Issues = "https://github.com/nokiyliao/codex-collaboration-harness/issues"
 
 [project.optional-dependencies]
 dev = [
-  "build==1.6.0",
+  "build==1.6.1",
 ]
 
 [tool.setuptools]
